@@ -18,6 +18,7 @@ WorldQuant BRAIN 本地超快速量化回测与因子初筛引擎 - 统一命令
 """
 
 import sys
+import json
 import argparse
 from pathlib import Path
 
@@ -54,7 +55,8 @@ def get_simulator() -> LocalWQSimulator:
 def cmd_run(args):
     """运行单因子极速回测"""
     sim = get_simulator()
-    console.print(f"[bold cyan]正在启动极速仿真引擎编译并执行表达式...[/bold cyan]")
+    if not args.json:
+        console.print(f"[bold cyan]正在启动极速仿真引擎编译并执行表达式...[/bold cyan]")
 
     metrics = sim.simulate(
         expression=args.expr,
@@ -65,13 +67,30 @@ def cmd_run(args):
         check_corr=not args.no_corr,
     )
 
-    display_alpha_report(
-        expression=args.expr,
-        metrics=metrics,
-        alpha_id=args.id,
-        delay=args.delay,
-        neutralization=args.neutralization,
-    )
+    if args.json:
+        result_payload = {
+            "alpha_id": args.id or "LOCAL_ALPHA",
+            "expression": args.expr,
+            "runtime_ms": metrics.runtime_ms,
+            "sharpe": metrics.sharpe,
+            "fitness": metrics.fitness,
+            "turnover": metrics.turnover,
+            "returns": metrics.returns,
+            "max_drawdown": metrics.max_drawdown,
+            "margin_bps": metrics.margin,
+            "sub_universe_sharpe": metrics.sub_universe_sharpe,
+            "is_all_passed": metrics.is_all_passed(),
+            "is_checks": metrics.is_checks,
+        }
+        print(json.dumps(result_payload, indent=2, ensure_ascii=False))
+    else:
+        display_alpha_report(
+            expression=args.expr,
+            metrics=metrics,
+            alpha_id=args.id,
+            delay=args.delay,
+            neutralization=args.neutralization,
+        )
 
     if args.commit:
         if metrics.daily_pnl.size > 0:
@@ -80,7 +99,8 @@ def cmd_run(args):
                 metrics.daily_dates,
                 metrics.daily_pnl,
             )
-            console.print("[green]✔ 因子已成功入库到本地已提交因子库！[/green]")
+            if not args.json:
+                console.print("[green]✔ 因子已成功入库到本地已提交因子库！[/green]")
 
     if args.submit:
         client = WorldQuantBrainClient()
@@ -101,7 +121,8 @@ def cmd_batch(args):
         console.print(f"[yellow]提示: {file_path} 中没有有效的因子表达式。[/yellow]")
         return
 
-    console.print(f"[bold cyan]开始批量回测 {len(lines)} 个因子表达式...[/bold cyan]")
+    if not args.json:
+        console.print(f"[bold cyan]开始批量回测 {len(lines)} 个因子表达式...[/bold cyan]")
     sim = get_simulator()
 
     results = []
@@ -129,16 +150,35 @@ def cmd_batch(args):
 
     # 按 Fitness 降序排序
     results.sort(key=lambda x: x["metrics"].fitness, reverse=True)
-    display_batch_leaderboard(results)
 
-    console.print(f"\n[bold green]初筛完成！共 {len(results)} 个因子，其中 {len(qualifying_alphas)} 个达到预设门槛 (Sharpe >= {args.min_sharpe}, Fitness >= {args.min_fitness})。[/bold green]")
+    if args.json:
+        batch_out = [
+            {
+                "id": r["id"],
+                "expression": r["expression"],
+                "sharpe": r["metrics"].sharpe,
+                "fitness": r["metrics"].fitness,
+                "turnover": r["metrics"].turnover,
+                "returns": r["metrics"].returns,
+                "max_drawdown": r["metrics"].max_drawdown,
+                "sub_universe_sharpe": r["metrics"].sub_universe_sharpe,
+                "is_all_passed": r["metrics"].is_all_passed(),
+                "runtime_ms": r["metrics"].runtime_ms,
+            }
+            for r in results
+        ]
+        print(json.dumps(batch_out, indent=2, ensure_ascii=False))
+    else:
+        display_batch_leaderboard(results)
+        console.print(f"\n[bold green]初筛完成！共 {len(results)} 个因子，其中 {len(qualifying_alphas)} 个达到预设门槛 (Sharpe >= {args.min_sharpe}, Fitness >= {args.min_fitness})。[/bold green]")
 
     if args.export:
         export_path = Path(args.export)
         export_alphas_to_csv(results, export_path)
 
     if args.submit and qualifying_alphas:
-        console.print(f"[bold cyan]正在对 {len(qualifying_alphas)} 个达标因子执行批量提交...[/bold cyan]")
+        if not args.json:
+            console.print(f"[bold cyan]正在对 {len(qualifying_alphas)} 个达标因子执行批量提交...[/bold cyan]")
         client = WorldQuantBrainClient()
         for q in qualifying_alphas:
             client.submit_alpha(q["expression"], q["metrics"], alpha_name=q["id"])
@@ -218,6 +258,7 @@ def main():
     run_parser.add_argument("--no-corr", action="store_true", help="跳过自相关性检测")
     run_parser.add_argument("--commit", action="store_true", help="回测后自动加入已提交因子库")
     run_parser.add_argument("--submit", action="store_true", help="一键提交至 WorldQuant BRAIN")
+    run_parser.add_argument("--json", action="store_true", help="以标准 JSON 格式输出结果 (供 Agent/流水线解析)")
 
     # 2. batch 命令
     batch_parser = subparsers.add_parser("batch", help="批量因子初筛")
@@ -229,6 +270,7 @@ def main():
     batch_parser.add_argument("--truncation", type=float, default=0.08, help="极值截断阈值")
     batch_parser.add_argument("--export", type=str, default=None, help="结果导出 CSV 路径")
     batch_parser.add_argument("--submit", action="store_true", help="自动提交所有达标因子")
+    batch_parser.add_argument("--json", action="store_true", help="以标准 JSON 格式输出结果 (供 Agent/流水线解析)")
 
     # 3. check-corr 命令
     corr_parser = subparsers.add_parser("check-corr", help="因子库自相关性检测")

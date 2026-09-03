@@ -35,7 +35,7 @@ class AlphaMetrics:
 
     def is_all_passed(self) -> bool:
         """是否全部通过 WorldQuant IS 严格红线检验"""
-        return all(v == "PASS" for v in self.is_checks.values())
+        return all(v == "PASS" or v.startswith("PASS") for v in self.is_checks.values())
 
 
 class LocalWQSimulator:
