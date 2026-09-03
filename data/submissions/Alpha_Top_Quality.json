@@ -1,0 +1,36 @@
+{
+  "status": "MOCK_SUBMITTED_OFFLINE",
+  "alpha_name": "Alpha_Top_Quality",
+  "timestamp": "20260904_011101",
+  "payload": {
+    "type": "REGULAR",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 0,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.08,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "OFF",
+      "language": "FASTEXPR",
+      "visualization": false
+    },
+    "regular": "group_rank(ts_rank(operating_income / equity, 126), subindustry)"
+  },
+  "local_metrics": {
+    "sharpe": 2.398,
+    "fitness": 3.161,
+    "turnover": 0.1342,
+    "is_checks": {
+      "LOW_SHARPE": "PASS",
+      "LOW_FITNESS": "PASS",
+      "TURNOVER": "PASS",
+      "DRAWDOWN": "PASS",
+      "SUB_UNIVERSE_TOP1000": "WARN (-0.55 < 1.0)",
+      "SELF_CORRELATION": "FAIL (Max Corr: 1.000 with 'Alpha_ROE_Trend')"
+    }
+  }
+}

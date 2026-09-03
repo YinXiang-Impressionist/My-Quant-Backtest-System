@@ -1,0 +1,25 @@
+# ==============================================================================
+# WorldQuant BRAIN 本地初筛 Alpha 候选库 (USA TOP3000)
+# 包含基本面质量 (Quality)、成长趋势 (Growth)、价量动量 (Momentum)、现金流 (CashFlow)
+# ==============================================================================
+
+# 1. ROE 趋势与稳定性质量因子
+group_rank(ts_rank(operating_income / equity, 126), subindustry)
+
+# 2. 核心双核质量：经营利润率与资产现金回报率加权
+0.5 * group_rank(ts_rank(operating_income / equity, 126), subindustry) + 0.5 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry)
+
+# 3. 营收相对资产效率 (Asset Turnover Efficiency)
+group_rank(ts_decay_linear(sales / assets, 63), subindustry)
+
+# 4. 稳健现金流增长加速因子 (Cashflow Acceleration)
+group_rank(ts_delta(cashflow_op / assets, 20), subindustry)
+
+# 5. 营业利润时序 Z-Score 因子
+group_rank(ts_zscore(operating_income / equity, 60), subindustry)
+
+# 6. 截面标准化动量反转综合因子
+-1.0 * group_rank(ts_decay_linear(returns, 10), subindustry)
+
+# 7. 成交量加权动量异动 (Volume-Weighted Momentum)
+group_rank(ts_decay_linear(returns * adv20, 20), subindustry)
