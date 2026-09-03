@@ -148,3 +148,59 @@ WorldQuant 历年实战验证表现最稳健、最高通过率的四大范式：
    - 若发现某因子 Sharpe $\ge 1.0$ 但其他指标未满贯，**禁止直接丢弃**，立即将其与正交的低相关特征（如现金流、动量或资产周转）进行双核加权杂交（如 `0.5*A + 0.5*B`）；
 4. **第 4 步：自相关拦截检验**：调用 `CorrelationChecker` 扫描日收益序列，验证与库内所有因子的最大相关系数 $< 0.65$；
 5. **第 5 步：入库并提交**：将满贯因子执行 `--commit` 写入本地已提交因子库，并生成 WorldQuant 官方 JSON 提交单！
+
+---
+
+## 7. 线上正式提交与元数据规范 (Submission & Metadata Standards)
+
+⚠️ **强制军规**：**严禁提交任何未命名、无分类标签的“裸 Alpha”！**
+提交一个因子不仅仅是调用 `/submit`，**必须在提交前或提交后立即调用官方 API (`PATCH /alphas/{id}`) 补充完整的专业元数据**，确保账户内策略可读、可溯源且符合 WorldQuant 顶级量化标准。
+
+### 7.1 因子命名规范 (Naming Conventions)
+命名统一遵循：`[大类前缀]_[核心经济逻辑]_[子策略]_[周期参数]`
+
+| 风格大类 | 前缀代号 | 示例名称 | 适用策略与逻辑说明 |
+| :--- | :--- | :--- | :--- |
+| **基本面质量** | `QAL_` | `QAL_ROA_RecSalesScissors_126` | 营业利润总资产回报、应收营收剪刀差排雷 |
+| **现金流与收益** | `FCF_` | `FCF_YLD_ReceivableTurnover_126` | 自由现金流收益率 (FCF/EV)、应收账款周转提速 |
+| **营运与股东回报** | `OPS_` | `OPS_Shareholder_BuybackYield_252` | 真实股票回购注销回报率、总资产周转率 |
+| **分析师预期** | `ANL_` | `ANL_MOM_Beneish_Manip_Rev126` | 分析师超预期盈利上修、Beneish M-Score 操纵防御 |
+| **跨界双核杂交** | `HYB_` | `HYB_VWAP_BuybackYield_126_252` | VWAP 反转动量 + 真实股票回购长线底仓杂交 |
+| **纯量价动量** | `MOM_` | `MOM_VWAP_Reversal_Decay10` | 典型微观价量、均值回归、波动率动量 |
+
+### 7.2 官方元数据枚举约束与色标方案 (Category & Color Scheme)
+- **`category` (官方严格枚举)**：
+  - `FUNDAMENTAL`：财务报表质量、现金流、股东回报类策略；
+  - `PRICE_VOLUME`：纯交易所量价反转、动量、波动率、流动性冲击；
+  - `ANALYST`：卖方分析师预测、盈利调整动量。
+  *(注：官方禁止传入非枚举字符串，杂交策略根据主驱动选择 `PRICE_VOLUME` 或 `FUNDAMENTAL`)*
+- **`color` (标准色标)**：
+  - `GREEN`：现金流收益率、股东回购与资产负债表防御；
+  - `BLUE`：盈利能力、ROE/ROA 资产营运质量；
+  - `PURPLE`：正交双核杂交策略、分析师超预期修正；
+  - `ORANGE` / `YELLOW`：纯量价动量与反转策略。
+- **`tags` (3~5 个英文下划线标签)**：
+  例如：`['VWAP_Reversal', 'Mean_Reversion', 'Share_Repurchase', 'Buyback_Yield', 'Orthogonal_Hybrid']`
+- **`regular.description` (专业英文经济学论述)**：
+  用 1~2 句严谨的英文清晰阐述策略的理论基础与加权配比。
+
+### 7.3 自动化提交与元数据封装 SOP (Python 模板)
+```python
+def submit_and_enrich_alpha(client, alpha_id: str, metadata: dict):
+    # 1. 立即补全元数据
+    patch_payload = {
+        "name": metadata["name"],
+        "category": metadata["category"],
+        "color": metadata.get("color", "PURPLE"),
+        "tags": metadata.get("tags", []),
+        "regular": {
+            "description": metadata.get("description", "")
+        }
+    }
+    client.session.patch(f"https://api.worldquantbrain.com/alphas/{alpha_id}", json=patch_payload)
+    
+    # 2. 调用正式提交
+    sub_res = client.session.post(f"https://api.worldquantbrain.com/alphas/{alpha_id}/submit")
+    assert sub_res.status_code in (200, 201), f"提交失败: {sub_res.text}"
+```
+
