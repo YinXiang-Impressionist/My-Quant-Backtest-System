@@ -36,3 +36,6 @@ Thumbs.db
 # Large Data & Raw Artifacts
 data/*.zip
 data/raw_sec/
+data/*.parquet
+!data/committed_alphas_pnl.parquet
+
