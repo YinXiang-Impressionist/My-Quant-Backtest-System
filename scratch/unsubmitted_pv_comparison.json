@@ -1,0 +1,194 @@
+[
+  {
+    "id": "akLqEvLv",
+    "name": null,
+    "expression": "group_rank(ts_rank(-(close / vwap - 1) * (volume / (adv20 + 1000)), 60), subindustry)",
+    "decay": 10,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 1.92,
+      "fitness": 0.79,
+      "turnover_twosided": 0.5615,
+      "returns": 0.0954,
+      "drawdown": 0.0394
+    },
+    "local_metrics": {
+      "sharpe": 1.324,
+      "fitness": 1.161,
+      "turnover_twosided": 0.548,
+      "turnover_onesided": 0.274,
+      "returns": 0.211,
+      "drawdown": 0.088,
+      "runtime_ms": 1124.2
+    }
+  },
+  {
+    "id": "xAY0dKEJ",
+    "name": null,
+    "expression": "group_rank(ts_rank(-(close / vwap - 1), 126), subindustry)",
+    "decay": 15,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 1.75,
+      "fitness": 0.8,
+      "turnover_twosided": 0.4667,
+      "returns": 0.0971,
+      "drawdown": 0.0466
+    },
+    "local_metrics": {
+      "sharpe": 1.293,
+      "fitness": 1.299,
+      "turnover_twosided": 0.448,
+      "turnover_onesided": 0.224,
+      "returns": 0.226,
+      "drawdown": 0.113,
+      "runtime_ms": 1344.7
+    }
+  },
+  {
+    "id": "0mR07Zmr",
+    "name": null,
+    "expression": "group_rank(ts_rank(abs(returns) / (adv20 + 1000), 126), subindustry)",
+    "decay": 0,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": -0.04,
+      "fitness": -0.0,
+      "turnover_twosided": 1.1997,
+      "returns": -0.0015,
+      "drawdown": 0.1477
+    },
+    "local_metrics": {
+      "sharpe": 0.474,
+      "fitness": 0.263,
+      "turnover_twosided": 1.213,
+      "turnover_onesided": 0.607,
+      "returns": 0.186,
+      "drawdown": 0.18,
+      "runtime_ms": 785.6
+    }
+  },
+  {
+    "id": "78ZEdNEQ",
+    "name": null,
+    "expression": "group_rank(ts_rank(-(close / vwap - 1), 60), subindustry)",
+    "decay": 0,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 2.15,
+      "fitness": 0.56,
+      "turnover_twosided": 1.3026,
+      "returns": 0.0884,
+      "drawdown": 0.0294
+    },
+    "local_metrics": {
+      "sharpe": 1.242,
+      "fitness": 0.75,
+      "turnover_twosided": 1.313,
+      "turnover_onesided": 0.656,
+      "returns": 0.24,
+      "drawdown": 0.04,
+      "runtime_ms": 566.6
+    }
+  },
+  {
+    "id": "E5vXkk2R",
+    "name": null,
+    "expression": "group_rank(ts_rank(ts_mean(abs(returns) / (volume * close + 10000), 20), 252), subindustry)",
+    "decay": 0,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": -0.23,
+      "fitness": -0.07,
+      "turnover_twosided": 0.2128,
+      "returns": -0.0178,
+      "drawdown": 0.2076
+    },
+    "local_metrics": {
+      "sharpe": 0.593,
+      "fitness": 0.809,
+      "turnover_twosided": 0.199,
+      "turnover_onesided": 0.1,
+      "returns": 0.233,
+      "drawdown": 0.092,
+      "runtime_ms": 682.7
+    }
+  },
+  {
+    "id": "0mRq2e6G",
+    "name": null,
+    "expression": "rank(close)",
+    "decay": 0,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 0.03,
+      "fitness": 0.01,
+      "turnover_twosided": 0.0255,
+      "returns": 0.0043,
+      "drawdown": 0.5453
+    },
+    "local_metrics": {
+      "sharpe": -1.277,
+      "fitness": -1.759,
+      "turnover_twosided": 0.019,
+      "turnover_onesided": 0.009,
+      "returns": -0.237,
+      "drawdown": 1.182,
+      "runtime_ms": 227.7
+    }
+  },
+  {
+    "id": "RRkPvLw0",
+    "name": null,
+    "expression": "rank(-returns)",
+    "decay": 4,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 1.72,
+      "fitness": 0.83,
+      "turnover_twosided": 0.8439,
+      "returns": 0.1954,
+      "drawdown": 0.0796
+    },
+    "local_metrics": {
+      "sharpe": 0.693,
+      "fitness": 0.635,
+      "turnover_twosided": 0.859,
+      "turnover_onesided": 0.429,
+      "returns": 0.361,
+      "drawdown": 0.146,
+      "runtime_ms": 445.4
+    }
+  },
+  {
+    "id": "0mK55jop",
+    "name": null,
+    "expression": "-returns",
+    "decay": 4,
+    "delay": 1,
+    "neutralization": "SUBINDUSTRY",
+    "wq_metrics": {
+      "sharpe": 1.44,
+      "fitness": 0.78,
+      "turnover_twosided": 0.8183,
+      "returns": 0.2412,
+      "drawdown": 0.1577
+    },
+    "local_metrics": {
+      "sharpe": 0.478,
+      "fitness": 1.523,
+      "turnover_twosided": 0.825,
+      "turnover_onesided": 0.412,
+      "returns": 4.181,
+      "drawdown": 0.223,
+      "runtime_ms": 361.7
+    }
+  }
+]

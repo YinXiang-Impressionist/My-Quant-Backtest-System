@@ -54,6 +54,7 @@ class LocalWQSimulator:
         self,
         expression: str,
         delay: int = 1,
+        decay: int = 0,
         neutralization: str = "SUBINDUSTRY",
         truncation: float = 0.08,
         alpha_id: Optional[str] = None,
@@ -96,6 +97,15 @@ class LocalWQSimulator:
         work_df = work_df.with_columns(
             w_final=operators.scale(pl.col("w_clipped"), 1.0)
         )
+
+        # 4.5 设定衰减 (WorldQuant settings.decay)
+        if decay > 0:
+            work_df = work_df.with_columns(
+                w_decay=operators.ts_decay_linear(pl.col("w_final"), decay).over("ticker")
+            )
+            work_df = work_df.with_columns(
+                w_final=operators.scale(pl.col("w_decay"), 1.0)
+            )
 
         # 5. 计算日度持仓与 PnL (严格执行 delay 交易日生效)
         work_df = work_df.with_columns(
