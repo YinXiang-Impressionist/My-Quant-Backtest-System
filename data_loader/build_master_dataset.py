@@ -18,6 +18,7 @@ import polars as pl
 import numpy as np
 
 from .config import (
+    DATA_DIR,
     PV_PATH,
     FUND_PATH,
     MASTER_PATH,
@@ -56,22 +57,26 @@ def build_master_dataset(
         if "end_date" in fund_df.columns and fund_df["end_date"].dtype != pl.Date:
             fund_df = fund_df.with_columns(pl.col("end_date").str.to_date("%Y-%m-%d"))
 
-        # 按 ticker, filed_date, field 进行去重，保留同日最后披露的版本
-        print("[PIT Builder] 正在按法定披露日 filed_date 透视财报长表为宽表...")
-        sort_cols = ["ticker", "field", "filed_date"]
-        if "end_date" in fund_df.columns:
-            sort_cols.append("end_date")
+        if "field" in fund_df.columns:
+            # 按 ticker, filed_date, field 进行去重，保留同日最后披露的版本
+            print("[PIT Builder] 正在按法定披露日 filed_date 透视财报长表为宽表...")
+            sort_cols = ["ticker", "field", "filed_date"]
+            if "end_date" in fund_df.columns:
+                sort_cols.append("end_date")
 
-        fund_dedup = fund_df.sort(sort_cols).group_by(
-            ["ticker", "filed_date", "field"]
-        ).last()
+            fund_dedup = fund_df.sort(sort_cols).group_by(
+                ["ticker", "filed_date", "field"]
+            ).last()
 
-        # 透视成宽表
-        fund_wide = fund_dedup.pivot(
-            values="value",
-            index=["ticker", "filed_date"],
-            on="field"
-        ).sort(["ticker", "filed_date"])
+            # 透视成宽表
+            fund_wide = fund_dedup.pivot(
+                values="value",
+                index=["ticker", "filed_date"],
+                on="field"
+            ).sort(["ticker", "filed_date"])
+        else:
+            print("[PIT Builder] 检测到财报已为标准宽表格式，执行去重...")
+            fund_wide = fund_df.group_by(["ticker", "filed_date"]).last().sort(["ticker", "filed_date"])
 
         # 核心 Point-in-Time 融合：使用 join_asof 严格执行 date >= filed_date
         print("[PIT Builder] 执行 Point-in-Time 严格对齐 (date >= filed_date)...")
@@ -86,11 +91,18 @@ def build_master_dataset(
         print("[PIT Builder] 提示: 未检测到基本面数据，仅基于价量宽表构建...")
         master = pv_df.sort(["date", "ticker"])
 
-    # 补充 GICS 4 位行业 subindustry 映射
+    # 补充 GICS 细分行业 (subindustry) 映射
     print("[PIT Builder] 补充 GICS 细分行业 (subindustry) 映射...")
+    mapping_path = DATA_DIR / "ticker_subindustry_mapping.json"
+    industry_map = {}
+    if mapping_path.exists():
+        import json
+        with open(mapping_path, "r", encoding="utf-8") as f:
+            industry_map = json.load(f)
+
     tickers_in_data = master["ticker"].unique().to_list()
     subind_records = [
-        {"ticker": t, "subindustry": SUBINDUSTRY_MAPPING.get(t, "Other_Industries")}
+        {"ticker": t, "subindustry": industry_map.get(t, SUBINDUSTRY_MAPPING.get(t, "General_Industries"))}
         for t in tickers_in_data
     ]
     subind_df = pl.DataFrame(subind_records)
@@ -138,6 +150,27 @@ def build_master_dataset(
         .then(pl.col("cap_rank") <= 1000)
         .otherwise(pl.col("cap_rank") <= (pl.col("total_stocks") * 0.5 + 1))
     ).drop(["cap_rank", "total_stocks"])
+
+    # 派生核心量价与跨表指标 (vwap, fcf, est_eps, ev)
+    print("[PIT Builder] 派生核心衍生指标 (vwap, fcf, est_eps, ev)...")
+    if "high" in master.columns and "low" in master.columns and "close" in master.columns:
+        master = master.with_columns(
+            vwap=(pl.col("high") + pl.col("low") + pl.col("close")) / 3.0
+        )
+    if "cashflow_op" in master.columns and "capex" in master.columns:
+        master = master.with_columns(
+            fcf=pl.col("cashflow_op") - pl.col("capex")
+        )
+    if "net_income" in master.columns and "cap" in master.columns:
+        master = master.with_columns(
+            est_eps=pl.col("net_income") / (pl.col("cap") / (pl.col("close") + 1e-4) + 1.0)
+        )
+    if "cap" in master.columns:
+        total_debt_col = pl.col("total_debt") if "total_debt" in master.columns else pl.lit(0.0)
+        cash_col = pl.col("cash") if "cash" in master.columns else pl.lit(0.0)
+        master = master.with_columns(
+            ev=pl.col("cap") + total_debt_col - cash_col
+        )
 
     # 组内无未来函数前向填充 (Forward Fill) 财报科目
     exclude_cols = {"date", "ticker", "subindustry", "open", "high", "low", "close", "volume", "returns", "adv20", "cap", "is_top1000", "filed_date"}

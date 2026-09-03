@@ -16,7 +16,7 @@ RAW_SEC_DIR = DATA_DIR / "raw_sec"
 
 # 核心数据文件路径
 PV_PATH = DATA_DIR / "pv_daily.parquet"
-FUND_PATH = DATA_DIR / "fundamentals.parquet"
+FUND_PATH = DATA_DIR / "fundamentals_top3000.parquet" if (DATA_DIR / "fundamentals_top3000.parquet").exists() else DATA_DIR / "fundamentals.parquet"
 MASTER_PATH = DATA_DIR / "master_backtest.parquet"
 ALIGNMENT_PATH = BASE_DIR / "data_loader" / "wq_sec_field_alignment.json"
 COMMITTED_ALPHAS_PATH = DATA_DIR / "committed_alphas_pnl.parquet"
@@ -45,8 +45,13 @@ XBRL_TAGS: Dict[str, List[str]] = {
     "cash": ["CashAndCashEquivalentsAtCarryingValue"],
     "shares_outstanding": ["CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding"],
     "rnd_expense": ["ResearchAndDevelopmentExpense"],
-    "interest_expense": ["InterestExpense"],
     "total_debt": ["LongTermDebtNoncurrent", "LongTermDebtCurrent"],
+    "goodwill": ["Goodwill"],
+    "value_of_shares_reacquired_during_period": [
+        "PaymentsForRepurchaseOfCommonStock",
+        "StockRepurchasedAndRetiredDuringPeriodValue",
+        "TreasuryStockValueAcquiredCostMethod",
+    ],
 }
 
 # GICS 行业分组映射 (WorldQuant subindustry / sector 对应聚类)

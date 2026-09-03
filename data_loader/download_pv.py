@@ -1,10 +1,12 @@
 """
-离线价量数据批量下载器 (PV Downloader)
-从公开交易所源批量拉取指定标的历史日 K 线，包含:
-- open, high, low, close, volume, returns, cap, adv20
-以 Parquet 压缩格式直接持久化到本地磁盘，支持 100% 离线回测。
+离线价量数据批量下载器 (PV Downloader - Vectorized High-Speed)
+从官方公开源极速拉取标的历史日 K 线，包含:
+- open, high, low, close, volume, returns, cap, adv20, vwap
+采用全向量化多线程下载与 Polars 并行处理，支持直接持久化至 Parquet。
 """
 
+import time
+import json
 from pathlib import Path
 from typing import List, Optional
 import yfinance as yf
@@ -13,88 +15,125 @@ import pandas as pd
 
 from .config import DATA_DIR, PV_PATH, CORE_TOP_TICKERS
 
+UNIVERSE_JSON = DATA_DIR / "universe_top3000.json"
+
 
 def download_offline_pv(
     tickers: Optional[List[str]] = None,
     start_date: str = "2019-01-01",
     end_date: str = "2023-12-31",
     output_path: Path = PV_PATH,
+    chunk_size: int = 150,
 ) -> pl.DataFrame:
-    """批量并行下载美股日线价量数据并生成基础衍生量"""
-    target_tickers = tickers or CORE_TOP_TICKERS
-    print(f"[PV Downloader] 正在批量下载 {len(target_tickers)} 只标的历史日线数据 ({start_date} ~ {end_date})...")
+    """批量并行下载美股日线价量数据并生成基础衍生量 (全向量化)"""
+    t0 = time.time()
+    
+    if tickers is None:
+        if UNIVERSE_JSON.exists():
+            with open(UNIVERSE_JSON, "r", encoding="utf-8") as f:
+                univ = json.load(f)
+            target_tickers = [x["ticker"] for x in univ]
+        else:
+            target_tickers = CORE_TOP_TICKERS
+    else:
+        target_tickers = tickers
 
-    # 批量并行下载
-    raw_df = yf.download(
-        tickers=target_tickers,
-        start=start_date,
-        end=end_date,
-        group_by="ticker",
-        auto_adjust=False,
-        threads=True,
-    )
+    print(f"[PV Downloader] 正在批量下载 {len(target_tickers)} 只标的日线数据 ({start_date} ~ {end_date})...")
 
-    records = []
-    for ticker in target_tickers:
+    all_chunks = []
+    
+    # 分块并行拉取，防止单次请求 URL 溢出或连接超时
+    for i in range(0, len(target_tickers), chunk_size):
+        chunk = target_tickers[i:i + chunk_size]
+        print(f"  -> 正在下载第 {i+1} ~ {min(i+chunk_size, len(target_tickers))} 只标的...")
         try:
-            if len(target_tickers) == 1:
-                sub_df = raw_df.copy()
-            else:
-                if ticker not in raw_df.columns.levels[0]:
-                    continue
-                sub_df = raw_df[ticker].dropna(how="all").copy()
-
-            if sub_df.empty:
+            raw_df = yf.download(
+                tickers=chunk,
+                start=start_date,
+                end=end_date,
+                auto_adjust=False,
+                threads=True,
+                progress=False,
+            )
+            if raw_df is None or raw_df.empty:
                 continue
-            sub_df = sub_df.reset_index()
 
-            for _, row in sub_df.iterrows():
-                dt = row["Date"].date() if hasattr(row["Date"], "date") else row["Date"]
-                c = float(row["Close"])
-                o = float(row["Open"])
-                h = float(row["High"])
-                l = float(row["Low"])
-                v = float(row["Volume"])
-                if c <= 0 or v < 0:
-                    continue
-                records.append({
-                    "date": dt,
-                    "ticker": ticker,
-                    "open": o,
-                    "high": h,
-                    "low": l,
-                    "close": c,
-                    "volume": v,
-                })
+            # 向量化转为单层 DataFrame
+            if isinstance(raw_df.columns, pd.MultiIndex):
+                # stack(level=1) 转平
+                stacked = raw_df.stack(level=1, future_stack=True).reset_index()
+            else:
+                stacked = raw_df.reset_index()
+                stacked["Ticker"] = chunk[0]
+
+            stacked.rename(
+                columns={
+                    "Date": "date",
+                    "Ticker": "ticker",
+                    "Open": "open",
+                    "High": "high",
+                    "Low": "low",
+                    "Close": "close",
+                    "Volume": "volume",
+                },
+                inplace=True,
+            )
+
+            # 过滤有效列
+            valid_cols = ["date", "ticker", "open", "high", "low", "close", "volume"]
+            stacked = stacked[[c for c in valid_cols if c in stacked.columns]]
+            stacked.dropna(subset=["close", "volume"], inplace=True)
+            stacked = stacked[stacked["close"] > 0]
+
+            if not stacked.empty:
+                chunk_pl = pl.from_pandas(stacked)
+                all_chunks.append(chunk_pl)
         except Exception as e:
-            print(f"Warning: Failed processing {ticker}: {e}")
+            print(f"  -> 分块下载异常 ({i} ~ {i+chunk_size}): {e}")
 
-    if not records:
-        print("[PV Downloader] 警告: 未获取到任何价量记录！")
-        return pl.DataFrame()
+    if not all_chunks:
+        raise RuntimeError("未能成功下载任何标的的日线数据。")
 
-    df = pl.DataFrame(records).sort(["date", "ticker"])
+    print("[PV Downloader] 正在合并并执行 Polars 向量化指标计算...")
+    pv_df = pl.concat(all_chunks).sort(["ticker", "date"])
 
-    # 统一日期类型
-    df = df.with_columns(pl.col("date").cast(pl.Date))
+    # 类型标准化
+    if pv_df["date"].dtype != pl.Date:
+        pv_df = pv_df.with_columns(pl.col("date").cast(pl.Date))
 
-    # 计算日收益率: close / shift(close, 1) - 1
-    df = df.with_columns(
-        returns=((pl.col("close") / pl.col("close").shift(1).over("ticker")) - 1.0)
-    ).filter(pl.col("returns").is_not_null())
-
-    # 计算 20 日成交额均值: adv20 = ts_mean(close * volume, 20)
-    df = df.with_columns(
-        turnover_val=pl.col("close") * pl.col("volume")
+    # 计算 returns, adv20, vwap
+    pv_df = pv_df.with_columns(
+        returns=((pl.col("close") / pl.col("close").shift(1).over("ticker")) - 1.0).fill_nan(0.0).fill_null(0.0),
+        adv20=(pl.col("close") * pl.col("volume")).rolling_mean(window_size=20, min_samples=1).over("ticker"),
+        vwap=((pl.col("high") + pl.col("low") + pl.col("close")) / 3.0)
     ).with_columns(
-        adv20=pl.col("turnover_val").rolling_mean(window_size=20, min_periods=1).over("ticker")
-    ).drop("turnover_val")
+        # 代理估算市值 cap
+        cap=(pl.col("close") * pl.col("adv20") * 10.0)
+    ).sort(["date", "ticker"])
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(output_path)
-    print(f"[PV Downloader] 完成！已保存 {df.shape[0]} 条价量记录到离线 Parquet 文件: {output_path}")
-    return df
+    pv_df.write_parquet(output_path)
+    print(f"[PV Downloader] 下载与清洗完成！")
+    print(f"  总耗时: {time.time() - t0:.2f} 秒")
+    print(f"  数据规模: {pv_df.shape[0]:,} 行 x {pv_df.shape[1]} 列")
+    print(f"  覆盖股票数: {pv_df['ticker'].n_unique():,} 只")
+    print(f"  时间跨度: {pv_df['date'].min()} ~ {pv_df['date'].max()}")
+    print(f"  已保存至: {output_path}")
+
+    return pv_df
 
 
 if __name__ == "__main__":
-    download_offline_pv()
+    import argparse
+    parser = argparse.ArgumentParser(description="批量下载美股日线价量数据")
+    parser.add_argument("--limit", type=int, default=300, help="下载前 N 大股票 (默认 300)")
+    parser.add_argument("--output", type=str, default=str(PV_PATH), help="输出 Parquet 路径")
+    args = parser.parse_args()
+
+    if UNIVERSE_JSON.exists():
+        with open(UNIVERSE_JSON, "r", encoding="utf-8") as f:
+            univ = json.load(f)
+        tickers_to_fetch = [x["ticker"] for x in univ[:args.limit]]
+    else:
+        tickers_to_fetch = CORE_TOP_TICKERS
+
+    download_offline_pv(tickers=tickers_to_fetch, output_path=Path(args.output))
