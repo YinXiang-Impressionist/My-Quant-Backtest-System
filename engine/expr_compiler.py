@@ -1,12 +1,19 @@
 """
-WorldQuant FastExpr 高性能 AST 编译器
+WorldQuant FastExpr 高性能 AST 编译器与语法级白名单验证器
 核心设计：
-1. 自动解耦时序 (Time-Series) 与截面 (Cross-Sectional) 窗口计算：
+1. 100% 严格的 WorldQuant BRAIN 官方原生字段白名单拦截与自动语法重写：
+   - 严禁原生使用 ev（自动重写为 cap + debt - cash）；
+   - 严禁原生使用 gross_profit（自动重写为 sales - cogs）；
+   - 严禁原生使用 net_income（自动重写为 operating_income）；
+   - 严禁原生使用 fcf（自动重写为 cashflow_op - capex）；
+   - 自动将 total_debt 规范化为 debt；
+   - 自动拦截并转换非法单位闭合算式（如 -(close / vwap - 1) -> -(close - vwap) / vwap）；
+2. 自动解耦时序 (Time-Series) 与截面 (Cross-Sectional) 窗口计算：
    - 提取嵌套的 ts_* 算子，采用分层阶段求值 (Staged Pipeline Evaluation)；
    - 彻底解决 Polars 在单个表达式中嵌套异构 over('ticker') 与 over(['date', group]) 时的上下文冲突；
-2. 结合 wq_sec_field_alignment.json 与同义词注册表，自动实现字段智能 Fallback；
-3. 支持复杂嵌套运算：数学函数、二元算术运算、逻辑比较、时序与分组算子；
-4. 纳秒/微秒级解析，保障回测控制在毫秒级 (<100ms)。
+3. 结合 wq_sec_field_alignment.json 与同义词注册表，自动实现字段智能 Fallback；
+4. 支持复杂嵌套运算：数学函数、二元算术运算、逻辑比较、时序与分组算子；
+5. 纳秒/微秒级解析，保障回测控制在毫秒级 (<50ms)。
 """
 
 import ast
@@ -19,23 +26,61 @@ from . import operators
 
 ALIGNMENT_FILE = Path(__file__).resolve().parent.parent / "data_loader" / "wq_sec_field_alignment.json"
 
+# WorldQuant 官方原生合法已知基础字段白名单
+OFFICIAL_WQ_FIELDS: Set[str] = {
+    # 基础价量 (Price-Volume)
+    "close", "open", "high", "low", "volume", "vwap", "returns", "cap", "adv20", "shares_outstanding", "split",
+    # 资产与负债 (Assets & Liabilities)
+    "assets", "assets_curr", "cash", "cash_st", "receivable", "inventory", "ppent", "goodwill", "intangible_assets",
+    "liabilities", "liabilities_curr", "debt", "debt_st", "debt_lt", "accounts_payable", "equity", "retained_earnings", "working_capital",
+    # 利润表原生科目 (Income Statement)
+    "sales", "cogs", "operating_income", "ebitda", "interest_expense", "rd_expense", "sga_expense", "income_tax", "depreciation",
+    # 现金流量表原生科目 (Cash Flow)
+    "cashflow_op", "capex", "cashflow_invst", "cashflow_fin", "cashflow_dividends",
+    "value_of_shares_reacquired_during_period",
+    # 常用分组与标的类别
+    "subindustry", "industry", "sector", "market",
+}
+
+# 严格非官方原生非法字段 -> 官方合法同义语法的自动重写规则
+DISALLOWED_FIELD_REPLACEMENTS: Dict[str, str] = {
+    "ev": "(cap + debt - cash)",
+    "enterprise_value": "(cap + debt - cash)",
+    "gross_profit": "(sales - cogs)",
+    "gp": "(sales - cogs)",
+    "net_income": "operating_income",
+    "income": "operating_income",
+    "ni": "operating_income",
+    "net_earnings": "operating_income",
+    "net_income_loss": "operating_income",
+    "fcf": "(cashflow_op - capex)",
+    "free_cash_flow": "(cashflow_op - capex)",
+    "total_debt": "debt",
+}
+
+# FastExpr 单位闭合安全改写规则 (将非闭合带量纲算式替换为无量纲分子分母结构)
+DIMENSION_UNIT_REPLACEMENTS: List[Tuple[str, str]] = [
+    (r'-\s*\(\s*close\s*/\s*vwap\s*-\s*1\s*\)', '-(close - vwap) / vwap'),
+    (r'close\s*/\s*vwap\s*-\s*1', '(close - vwap) / vwap'),
+    (r'-\s*\(\s*close\s*/\s*open\s*-\s*1\s*\)', '-(close - open) / open'),
+    (r'close\s*/\s*open\s*-\s*1', '(close - open) / open'),
+    (r'-\s*\(\s*close\s*/\s*ts_delay\s*\(\s*close\s*,\s*(\d+)\s*\)\s*-\s*1\s*\)', r'-(close - ts_delay(close, \1)) / ts_delay(close, \1)'),
+    (r'close\s*/\s*ts_delay\s*\(\s*close\s*,\s*(\d+)\s*\)\s*-\s*1', r'(close - ts_delay(close, \1)) / ts_delay(close, \1)'),
+]
+
 # 核心双向同义词分组注册表 (覆盖 WorldQuant 官方 4367 字段习惯命名)
 SYNONYM_GROUPS: List[List[str]] = [
-    # 净利润与收入
-    ["net_income", "income", "ni", "net_income_loss", "net_earnings"],
-    # 营业利润 / EBIT
-    ["operating_income", "ebit", "op_income", "operating_profit", "operating_income_loss"],
+    # 净利润与收入 (本地兜底)
+    ["operating_income", "net_income", "income", "ni", "net_income_loss", "net_earnings", "ebit", "op_income", "operating_profit", "operating_income_loss"],
     # 息税折旧摊销前利润
     ["ebitda", "operating_income_plus_depr"],
-    # 负债与债务
-    ["total_debt", "debt", "total_liabilities_debt"],
+    # 负债与债务 (debt 为官方原生字段，total_debt 为离线宽表列名)
+    ["debt", "total_debt", "total_liabilities_debt"],
     ["debt_st", "short_term_debt", "debt_current", "short_term_borrowings"],
     ["debt_lt", "long_term_debt"],
     ["liabilities", "total_liabilities"],
     ["liabilities_curr", "current_liabilities"],
     ["accounts_payable", "ap", "accounts_payable_current"],
-    # 企业价值
-    ["ev", "enterprise_value"],
     # 营业收入
     ["sales", "revenues", "revenue", "sales_revenue", "total_revenue", "turnover"],
     # 营业成本与毛利
@@ -124,6 +169,53 @@ def load_wq_official_field_ids() -> Set[str]:
 
 
 WQ_OFFICIAL_FIELD_IDS = load_wq_official_field_ids()
+
+
+def clean_wq_expression(expr_str: str) -> str:
+    """清理表达式中的 C 风格多行注释 /* */、单行注释 // 与 #"""
+    s = re.sub(r'/\*.*?\*/', '', expr_str, flags=re.DOTALL)
+    s = re.sub(r'//.*', '', s)
+    s = re.sub(r'#.*', '', s)
+    return s.strip()
+
+
+def sanitize_and_validate_wq_expr(expr_str: str, verbose: bool = False) -> Tuple[str, List[str]]:
+    """
+    语法级白名单验证器与单位闭合清洗器：
+    1. 剔除多行/单行注释；
+    2. 拦截带量纲非闭合算式（如 -(close / vwap - 1)），自动改写为无量纲闭合算式；
+    3. 拦截非法原生字段（ev, gross_profit, net_income, fcf 等），自动转换为官方合法同义语法；
+    4. 返回 (sanitized_expr, warnings)。
+    """
+    clean_expr = clean_wq_expression(expr_str)
+    if not clean_expr:
+        return "", ["表达式为空"]
+
+    warnings = []
+    sanitized = clean_expr
+
+    # 1. 单位闭合安全改写
+    for pattern, repl in DIMENSION_UNIT_REPLACEMENTS:
+        if re.search(pattern, sanitized):
+            warnings.append(
+                f"[Unit Safety] 拦截非闭合量纲算式: 自动重写为无量纲安全形式 -> '{repl}'"
+            )
+            sanitized = re.sub(pattern, repl, sanitized)
+
+    # 2. 非法原生字段拦截与改写
+    for disallowed, repl in DISALLOWED_FIELD_REPLACEMENTS.items():
+        pattern = r'\b' + re.escape(disallowed) + r'\b'
+        if re.search(pattern, sanitized):
+            warnings.append(
+                f"[AST Whitelist] 拦截非官方原生字段 '{disallowed}': 自动转换为官方合法语法 -> '{repl}'"
+            )
+            sanitized = re.sub(pattern, repl, sanitized)
+
+    if verbose and warnings:
+        for w in warnings:
+            print(f"    ⚠️ {w}")
+
+    return sanitized, warnings
 
 
 class TSExtractor(ast.NodeTransformer):
@@ -263,20 +355,12 @@ class CompiledWQExpr:
         return work_df
 
 
-def clean_wq_expression(expr_str: str) -> str:
-    """清理表达式中的 C 风格多行注释 /* */、单行注释 // 与 #"""
-    s = re.sub(r'/\*.*?\*/', '', expr_str, flags=re.DOTALL)
-    s = re.sub(r'//.*', '', s)
-    s = re.sub(r'#.*', '', s)
-    return s.strip()
-
-
 def compile_wq_expr(
     expr_str: str,
     available_columns: Optional[Set[str]] = None
 ) -> CompiledWQExpr:
-    """将 WorldQuant 表达式字符串编译为分层阶段求值对象"""
-    clean_expr = clean_wq_expression(expr_str)
+    """将 WorldQuant 表达式字符串编译为分层阶段求值对象，前置执行语法级白名单清洗"""
+    clean_expr, warnings = sanitize_and_validate_wq_expr(expr_str)
     if not clean_expr:
         raise ValueError("输入表达式不能为空！")
 

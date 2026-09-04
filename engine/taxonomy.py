@@ -4,6 +4,8 @@ WorldQuant BRAIN 量化策略分类学与多层级因子特征库 (Factor Taxono
 ================================================================================
 包含 5 大类、18 个细分子类，覆盖微观量价、基本面营运、现金流真实回报、
 资产负债表排雷与跨界正交双核杂交演化的全维度候选特征。
+完全符合 WorldQuant 官方 100% 原生合法字段规范与无量纲闭合黄金算式。
+================================================================================
 """
 
 from typing import List, Dict, Any
@@ -17,12 +19,12 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
         # ==============================================================================
         {
             "category": "微观量价与流动性",
-            "subcategory": "1.1 VWAP 偏离与均值回归反转",
+            "subcategory": "1.1 VWAP 偏离与均值回归反转 (量纲严格闭合)",
             "factors": [
-                {"name": "VWAP短周期偏离反转", "expr": "group_rank(ts_rank(-(close / vwap - 1), 20), subindustry)", "decay": 5},
-                {"name": "VWAP中周期偏离反转", "expr": "group_rank(ts_rank(-(close / vwap - 1), 60), subindustry)", "decay": 10},
-                {"name": "VWAP长周期偏离反转", "expr": "group_rank(ts_rank(-(close / vwap - 1), 126), subindustry)", "decay": 15},
-                {"name": "VWAP偏离×成交额加权", "expr": "group_rank(ts_rank(-(close / vwap - 1) * (volume / (adv20 + 1000)), 60), subindustry)", "decay": 10},
+                {"name": "VWAP短周期偏离反转", "expr": "group_rank(ts_rank(-(close - vwap) / vwap, 20), subindustry)", "decay": 5},
+                {"name": "VWAP中周期偏离反转", "expr": "group_rank(ts_rank(-(close - vwap) / vwap, 60), subindustry)", "decay": 10},
+                {"name": "VWAP长周期偏离反转", "expr": "group_rank(ts_rank(-(close - vwap) / vwap, 126), subindustry)", "decay": 15},
+                {"name": "VWAP偏离×成交额加权", "expr": "group_rank(ts_rank((-(close - vwap) / vwap) * (volume / (adv20 + 1000)), 60), subindustry)", "decay": 10},
             ]
         },
         {
@@ -32,7 +34,7 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
                 {"name": "单日超短期收益反转", "expr": "-group_rank(returns, subindustry)", "decay": 4},
                 {"name": "5日累计收益反转", "expr": "-group_rank(ts_rank(returns, 5), subindustry)", "decay": 5},
                 {"name": "10日时序衰减动量反转", "expr": "-group_rank(ts_decay_linear(returns, 10), subindustry)", "decay": 5},
-                {"name": "12-1月中长线跳水动量", "expr": "group_rank(ts_rank(ts_delay(close, 20) / ts_delay(close, 252) - 1, 126), subindustry)", "decay": 10},
+                {"name": "12-1月中长线跳水动量", "expr": "group_rank(ts_rank((ts_delay(close, 20) - ts_delay(close, 252)) / ts_delay(close, 252), 126), subindustry)", "decay": 10},
             ]
         },
         {
@@ -87,7 +89,7 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
         },
         {
             "category": "真实基本面营运与盈利质量",
-            "subcategory": "2.3 毛利率改善与营业成本控制",
+            "subcategory": "2.3 毛利率改善与营业成本控制 (原生 sales - cogs)",
             "factors": [
                 {"name": "毛利率水平时序趋势", "expr": "group_rank(ts_rank((sales - cogs) / sales, 126), subindustry)", "decay": 10},
                 {"name": "毛利率252日时序增量", "expr": "group_rank(ts_delta((sales - cogs) / sales, 252), subindustry)", "decay": 10},
@@ -127,19 +129,19 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
         },
         {
             "category": "现金流含金量与股东回报",
-            "subcategory": "3.2 自由现金流收益率 (FCF Yield)",
+            "subcategory": "3.2 自由现金流收益率 (FCF Yield 官方语法)",
             "factors": [
-                {"name": "自由现金流市值收益率 (FCF Yield)", "expr": "group_rank(ts_rank(fcf / cap, 126), subindustry)", "decay": 10},
-                {"name": "自由现金流企业价值回报 (FCF/EV)", "expr": "group_rank(ts_rank(fcf / ev, 126), subindustry)", "decay": 10},
-                {"name": "FCF / Assets 实体资产真实自由现金生成", "expr": "group_rank(ts_rank(fcf / assets, 126), subindustry)", "decay": 10},
+                {"name": "自由现金流市值收益率 (FCF Yield)", "expr": "group_rank(ts_rank((cashflow_op - capex) / cap, 126), subindustry)", "decay": 10},
+                {"name": "自由现金流企业价值回报 (FCF/EV 官方语法)", "expr": "group_rank(ts_rank((cashflow_op - capex) / (cap + debt - cash), 126), subindustry)", "decay": 10},
+                {"name": "FCF / Assets 实体资产真实自由现金生成", "expr": "group_rank(ts_rank((cashflow_op - capex) / assets, 126), subindustry)", "decay": 10},
             ]
         },
         {
             "category": "现金流含金量与股东回报",
-            "subcategory": "3.3 利润真实性与应计盈余检验 (CFO vs Net Income)",
+            "subcategory": "3.3 利润真实性与应计盈余检验 (CFO vs Operating Income)",
             "factors": [
-                {"name": "现金利润比 (CFO / Net Income)", "expr": "group_rank(ts_rank(cashflow_op / (abs(net_income) + 0.01 * assets), 126), subindustry)", "decay": 10},
-                {"name": "应计盈余负向排雷 (Accruals Anomaly)", "expr": "group_rank(ts_rank(-(net_income - cashflow_op) / assets, 126), subindustry)", "decay": 10},
+                {"name": "现金利润比 (CFO / Operating Income)", "expr": "group_rank(ts_rank(cashflow_op / (abs(operating_income) + 0.01 * assets), 126), subindustry)", "decay": 10},
+                {"name": "应计盈余负向排雷 (Accruals Anomaly)", "expr": "group_rank(ts_rank(-(operating_income - cashflow_op) / assets, 126), subindustry)", "decay": 10},
             ]
         },
         {
@@ -167,8 +169,8 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
             "category": "资产负债表稳健性与破产排雷",
             "subcategory": "4.1 存贷双高失真度排雷",
             "factors": [
-                {"name": "存贷双高乘积排雷", "expr": "group_rank(ts_rank(-((cash / assets) * (total_debt / assets)), 126), subindustry)", "decay": 10},
-                {"name": "现金对总负债净覆盖率", "expr": "group_rank(ts_rank((cash - total_debt) / assets, 126), subindustry)", "decay": 10},
+                {"name": "存贷双高乘积排雷", "expr": "group_rank(ts_rank(-((cash / assets) * (debt / assets)), 126), subindustry)", "decay": 10},
+                {"name": "现金对总负债净覆盖率", "expr": "group_rank(ts_rank((cash - debt) / assets, 126), subindustry)", "decay": 10},
             ]
         },
         {
@@ -197,28 +199,28 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
             "factors": [
                 {
                     "name": "CFROA 50% × VWAP偏离反转 50%",
-                    "expr": "0.5 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.5 * group_rank(ts_rank(-(close / vwap - 1), 126), subindustry)",
+                    "expr": "0.5 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.5 * group_rank(ts_rank(-(close - vwap) / vwap, 126), subindustry)",
                     "decay": 15
                 },
                 {
                     "name": "CFROA 35% × VWAP量比偏离 65%",
-                    "expr": "0.35 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.65 * group_rank(ts_rank(-(close / vwap - 1) * (volume / (adv20 + 1000)), 60), subindustry)",
+                    "expr": "0.35 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.65 * group_rank(ts_rank((-(close - vwap) / vwap) * (volume / (adv20 + 1000)), 60), subindustry)",
                     "decay": 10
                 },
             ]
         },
         {
             "category": "跨界正交双核杂交进化",
-            "subcategory": "5.2 自由现金流 × 股票回购注销",
+            "subcategory": "5.2 自由现金流 × 股票回购 (回购权重<=25% 宏观稳健)",
             "factors": [
                 {
-                    "name": "FCF收益率 50% × 股票回购 50%",
-                    "expr": "0.5 * group_rank(ts_rank(fcf / ev, 126), subindustry) + 0.5 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
+                    "name": "FCF收益率 80% × 股票回购 20%",
+                    "expr": "0.8 * group_rank(ts_rank((cashflow_op - capex) / (cap + debt - cash), 126), subindustry) + 0.2 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
                     "decay": 10
                 },
                 {
-                    "name": "FCF收益率 35% × 股票回购 65%",
-                    "expr": "0.35 * group_rank(ts_rank(fcf / ev, 252), subindustry) + 0.65 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
+                    "name": "FCF收益率 75% × 股票回购 25%",
+                    "expr": "0.75 * group_rank(ts_rank((cashflow_op - capex) / assets, 252), subindustry) + 0.25 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
                     "decay": 15
                 },
             ]
@@ -229,7 +231,7 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
             "factors": [
                 {
                     "name": "营业现金流 70% × 存贷双高排雷 30%",
-                    "expr": "0.7 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.3 * group_rank(ts_rank(-((cash / assets) * (total_debt / assets)), 126), subindustry)",
+                    "expr": "0.7 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry) + 0.3 * group_rank(ts_rank(-((cash / assets) * (debt / assets)), 126), subindustry)",
                     "decay": 10
                 },
                 {
@@ -241,7 +243,7 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
         },
         {
             "category": "跨界正交双核杂交进化",
-            "subcategory": "5.4 动量反转 × 财报质量",
+            "subcategory": "5.4 动量反转 × 财报质量与三元增强",
             "factors": [
                 {
                     "name": "5日反转 50% × CFROA现金流 50%",
@@ -249,9 +251,9 @@ def build_factor_taxonomy() -> List[Dict[str, Any]]:
                     "decay": 8
                 },
                 {
-                    "name": "VWAP反转 60% × 股票回购 40%",
-                    "expr": "0.6 * group_rank(ts_rank(-(close / vwap - 1), 126), subindustry) + 0.4 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
-                    "decay": 15
+                    "name": "VWAP反转 60% × 资产营业利润 20% × 股票回购 20% (黄金三元因子)",
+                    "expr": "0.6 * group_rank(ts_decay_linear(ts_rank(-(close - vwap) / vwap, 20), 5), subindustry) + 0.2 * group_rank(ts_rank(operating_income / assets, 126), subindustry) + 0.2 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
+                    "decay": 5
                 }
             ]
         }

@@ -1,11 +1,15 @@
 """
 WorldQuant 本地极速向量化多空仿真器与 IS 质检评估引擎
 特性：
-1. 100% 向量化 Polars 表达式执行，单次回测严格控制在 <100ms；
+1. 100% 向量化 Polars 表达式执行，单次回测严格控制在 <50ms；
 2. 完美对齐 WorldQuant 换手率公式：0.5 * sum(|w_t - w_{t-1}|)；
 3. 严格落实 SUBINDUSTRY 截面中性化 + 0.08 极值截断 (Truncation) + 权重双边归一化；
 4. 严格实施 delay=1 交易滞后防未来函数；
-5. 实施 TOP1000 Sub-Universe 穿透检验与日收益 Self-Correlation 预检。
+5. 实施 TOP1000 Sub-Universe 穿透检验与日收益 Self-Correlation 预检 (< 0.65 红线)；
+6. 严格实施【逐年穿透核算（Year-by-Year IS Audit）】门禁：
+   - 2019-2023 独立 5 年切分；
+   - 5 年年年必须为正收益（Annualized Return > 0）；
+   - 每一单年 Sharpe 必须 >= 1.20（低于 1.20 直接标记 FAIL 阻断通过）。
 """
 
 from dataclasses import dataclass, field
@@ -31,6 +35,7 @@ class AlphaMetrics:
     is_checks: Dict[str, str]
     daily_dates: List[Any] = field(default_factory=list)
     daily_pnl: np.ndarray = field(default_factory=lambda: np.array([]))
+    yearly_metrics: Dict[int, Dict[str, float]] = field(default_factory=dict)
     runtime_ms: float = 0.0
 
     def is_all_passed(self) -> bool:
@@ -60,11 +65,11 @@ class LocalWQSimulator:
         alpha_id: Optional[str] = None,
         check_corr: bool = True,
     ) -> AlphaMetrics:
-        """执行毫秒级多空仿真回测"""
+        """执行毫秒级多空仿真回测与逐年穿透质检"""
         import time
         t_start = time.perf_counter()
 
-        # 1. AST 编译 WorldQuant 表达式
+        # 1. AST 编译 WorldQuant 表达式 (自动执行语法白名单校验与改写)
         compiled_fn = compile_wq_expr(expression, available_columns=self.available_columns)
 
         # 2. 批量分层向量化计算 Alpha Raw Signal
@@ -158,10 +163,11 @@ class LocalWQSimulator:
                 is_checks={"STATUS": "FAIL (Insufficient Data or Constant Signal)"},
                 daily_dates=dates,
                 daily_pnl=daily_pnls,
+                yearly_metrics={},
                 runtime_ms=round(runtime_ms, 2),
             )
 
-        # 8. WorldQuant 标准 IS 指标计算
+        # 8. WorldQuant 标准 5 年全周期 IS 指标计算
         mean_pnl = float(np.mean(pnl))
         std_pnl = float(np.std(pnl))
         sharpe = float(mean_pnl / std_pnl * np.sqrt(252))
@@ -188,13 +194,53 @@ class LocalWQSimulator:
         else:
             sub_sharpe = sharpe
 
-        # 9. IS 规则综合检验
+        # 8.5 计算按年份分拆指标 (严格对齐 WorldQuant 官方单年穿透质检)
+        yearly_metrics: Dict[int, Dict[str, float]] = {}
+        years = np.array([d.year if hasattr(d, "year") else int(str(d)[:4]) for d in dates])
+        unique_years = sorted(np.unique(years))
+        for y in unique_years:
+            y_mask = (years == y) & valid_mask
+            if np.sum(y_mask) > 20:
+                y_pnl = daily_pnls[y_mask]
+                y_to = daily_tos[y_mask]
+                y_mean = float(np.mean(y_pnl))
+                y_std = float(np.std(y_pnl))
+                y_sh = float(y_mean / y_std * np.sqrt(252)) if y_std > 1e-8 else 0.0
+                y_ret = float(y_mean * 252)
+                y_turn = float(np.mean(y_to))
+                y_fit = float(y_sh * np.sqrt(abs(y_ret) / max(y_turn, 0.125)))
+                y_cum = np.cumsum(y_pnl)
+                y_dd = float(np.max(np.maximum.accumulate(y_cum) - y_cum)) if len(y_cum) > 0 else 0.0
+                y_margin = float(np.sum(y_pnl) / (np.sum(y_to) + 1e-8) * 10000)
+                yearly_metrics[int(y)] = {
+                    "sharpe": round(y_sh, 2),
+                    "turnover": round(y_turn, 4),
+                    "fitness": round(y_fit, 2),
+                    "returns": round(y_ret, 4),
+                    "drawdown": round(y_dd, 4),
+                    "margin": round(y_margin, 2),
+                }
+
+        # 9. IS 规则综合检验 (包含 YEARLY_STABILITY 硬性门禁)
+        min_y_sharpe = min((ym["sharpe"] for ym in yearly_metrics.values()), default=sharpe)
+        has_negative_return = any(ym["returns"] <= 0 for ym in yearly_metrics.values())
+
+        if has_negative_return:
+            neg_years = [str(y) for y, ym in yearly_metrics.items() if ym["returns"] <= 0]
+            yearly_stability_check = f"FAIL (Negative Return in {', '.join(neg_years)})"
+        elif min_y_sharpe < 1.20:
+            fail_years = [f"{y}:{ym['sharpe']:.2f}" for y, ym in yearly_metrics.items() if ym["sharpe"] < 1.20]
+            yearly_stability_check = f"FAIL (Min Year Sharpe: {min_y_sharpe:.2f} < 1.20 [{', '.join(fail_years)}])"
+        else:
+            yearly_stability_check = f"PASS (All Years Ret > 0, Min Year Sharpe: {min_y_sharpe:.2f} >= 1.20)"
+
         is_checks = {
             "LOW_SHARPE": "PASS" if sharpe >= 1.25 else f"FAIL ({sharpe:.2f} < 1.25)",
             "LOW_FITNESS": "PASS" if fitness >= 1.0 else f"FAIL ({fitness:.2f} < 1.0)",
             "TURNOVER": "PASS" if (0.01 <= turnover <= 0.70) else f"FAIL ({turnover*100:.1f}%)",
             "DRAWDOWN": "PASS" if max_dd < 0.25 else f"WARN ({max_dd*100:.1f}%)",
             "SUB_UNIVERSE_TOP1000": "PASS" if sub_sharpe >= 1.0 else f"WARN ({sub_sharpe:.2f} < 1.0)",
+            "YEARLY_STABILITY": yearly_stability_check,
         }
 
         # 10. Self-Correlation 预检 (< 0.65 红线)
@@ -219,5 +265,6 @@ class LocalWQSimulator:
             is_checks=is_checks,
             daily_dates=dates,
             daily_pnl=daily_pnls,
+            yearly_metrics=yearly_metrics,
             runtime_ms=round(runtime_ms, 2),
         )

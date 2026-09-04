@@ -1,9 +1,10 @@
 """
 WorldQuant BRAIN 本地回测终端富文本仪表盘 (Rich Visualizer)
-跨平台与 Windows GBK 编码安全设计
+跨平台与 Windows UTF-8 编码安全设计，支持 5 年逐年穿透核算与流式输出
 """
 
 import sys
+import os
 from typing import List, Optional
 from rich.console import Console
 from rich.table import Table
@@ -13,12 +14,13 @@ from rich import box
 
 from .simulator import AlphaMetrics
 
-# Windows UTF-8 编码防御
+# 强制流式非缓冲输出
+os.environ["PYTHONUNBUFFERED"] = "1"
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(line_buffering=True, encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(line_buffering=True, encoding="utf-8", errors="replace")
 
 console = Console(force_terminal=True, legacy_windows=False)
 
@@ -31,7 +33,7 @@ def display_alpha_report(
     universe: str = "USA TOP3000",
     neutralization: str = "SUBINDUSTRY"
 ):
-    """打印单因子高保真回测富文本报告看板"""
+    """打印单因子高保真回测富文本报告看板与逐年穿透矩阵"""
     title_text = Text("[WorldQuant BRAIN Local Engine - Alpha Report]", style="bold cyan")
 
     # 顶部元数据
@@ -45,8 +47,8 @@ def display_alpha_report(
     )
     console.print(Panel(meta_info, title=title_text, border_style="cyan", box=box.ROUNDED))
 
-    # 核心指标表格
-    metrics_table = Table(title="Performance Metrics (WorldQuant Official)", box=box.SIMPLE_HEAVY)
+    # 核心总体指标表格
+    metrics_table = Table(title="Performance Metrics (WorldQuant Official 5-Year Total)", box=box.SIMPLE_HEAVY)
     metrics_table.add_column("Sharpe", justify="center", style="bold magenta")
     metrics_table.add_column("Fitness", justify="center", style="bold cyan")
     metrics_table.add_column("Turnover", justify="center", style="bold yellow")
@@ -66,6 +68,35 @@ def display_alpha_report(
     )
     console.print(metrics_table)
 
+    # WorldQuant 逐年分年度穿透核算表格 (完全对齐官方面板)
+    if hasattr(metrics, "yearly_metrics") and metrics.yearly_metrics:
+        yearly_table = Table(title="WorldQuant Yearly Breakdown (5年逐年穿透核算)", box=box.ROUNDED)
+        yearly_table.add_column("Year", justify="center", style="bold white")
+        yearly_table.add_column("Sharpe", justify="right")
+        yearly_table.add_column("Turnover", justify="right")
+        yearly_table.add_column("Fitness", justify="right")
+        yearly_table.add_column("Returns", justify="right")
+        yearly_table.add_column("Drawdown", justify="right")
+        yearly_table.add_column("Margin", justify="right")
+        yearly_table.add_column("Status", justify="center")
+
+        for y, ym in sorted(metrics.yearly_metrics.items()):
+            sh_style = "bold green" if ym["sharpe"] >= 1.20 else ("yellow" if ym["sharpe"] >= 1.0 else "bold red")
+            fit_style = "bold green" if ym["fitness"] >= 1.0 else "bold red"
+            is_y_pass = (ym["sharpe"] >= 1.20 and ym["returns"] > 0)
+            st_text = "[PASS]" if is_y_pass else "[FAIL]"
+            yearly_table.add_row(
+                str(y),
+                Text(f"{ym['sharpe']:+.2f}", style=sh_style),
+                f"{ym['turnover']*100:.2f}%",
+                Text(f"{ym['fitness']:.2f}", style=fit_style),
+                f"{ym['returns']*100:+.2f}%",
+                f"{ym['drawdown']*100:.2f}%",
+                f"{ym['margin']:.2f} bps",
+                Text(st_text, style="bold green" if is_y_pass else "bold red"),
+            )
+        console.print(yearly_table)
+
     # IS 质检红线表格
     is_table = Table(title="WorldQuant In-Sample (IS) Quality Matrix", box=box.ROUNDED)
     is_table.add_column("Check Item", style="bold white")
@@ -78,6 +109,7 @@ def display_alpha_report(
         "TURNOVER": "1.0% <= Turnover <= 70.0%",
         "DRAWDOWN": "Max Drawdown < 25.0%",
         "SUB_UNIVERSE_TOP1000": "Sub-Universe Sharpe >= 1.0",
+        "YEARLY_STABILITY": "5 Years Return > 0 & Min Year Sharpe >= 1.20",
         "SELF_CORRELATION": "Max Pearson Corr < 0.65",
     }
 
@@ -98,7 +130,7 @@ def display_alpha_report(
 
     # 结果判定横幅
     if all_passed:
-        console.print(Panel("[bold green]CONGRATULATIONS: ALPHA PASSED ALL WORLDQUANT IS CHECKS![/bold green]", box=box.HEAVY))
+        console.print(Panel("[bold green]CONGRATULATIONS: ALPHA PASSED ALL WORLDQUANT IS & YEARLY STABILITY CHECKS![/bold green]", box=box.HEAVY))
     else:
         console.print(Panel("[bold yellow]NOTICE: Some IS criteria not met. Please optimize further.[/bold yellow]", box=box.HEAVY))
 
