@@ -16,28 +16,64 @@ LAKEHOUSE_DIR = Path(r"c:\Users\xiang\.gemini\antigravity-ide\scratch\stock_fina
 UNIVERSE_JSON = PROJECT_DIR / "data" / "universe_top3000.json"
 OUTPUT_PARQUET = PROJECT_DIR / "data" / "fundamentals_top3000.parquet"
 
-# 2. 目标财报标签映射
+# 2. 目标财报标签映射 (全面对齐 WorldQuant 核心三张表会计科目)
 TAG_TO_FIELD = {
+    # 资产类
     "Assets": "assets",
+    "AssetsCurrent": "assets_curr",
+    "CashAndCashEquivalentsAtCarryingValue": "cash",
+    "CashCashEquivalentsAndShortTermInvestments": "cash_st",
+    "AccountsReceivableNetCurrent": "receivable",
+    "AccountsAndOtherReceivablesNetCurrent": "receivable",
+    "InventoryNet": "inventory",
+    "PropertyPlantAndEquipmentNet": "ppent",
+    "Goodwill": "goodwill",
+    "FiniteLivedIntangibleAssetsNet": "intangible_assets",
+
+    # 负债与股东权益
+    "Liabilities": "liabilities",
+    "LiabilitiesCurrent": "liabilities_curr",
     "StockholdersEquity": "equity",
     "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest": "equity",
+    "LongTermDebtNoncurrent": "total_debt",
+    "LongTermDebtCurrent": "debt_st",
+    "DebtCurrent": "debt_st",
+    "ShortTermBorrowings": "debt_st",
+    "AccountsPayableCurrent": "accounts_payable",
+    "RetainedEarningsAccumulatedDeficit": "retained_earnings",
+
+    # 利润表
     "OperatingIncomeLoss": "operating_income",
     "Revenues": "sales",
     "SalesRevenueNet": "sales",
     "RevenueFromContractWithCustomerExcludingAssessedTax": "sales",
     "CostOfGoodsAndServicesSold": "cogs",
     "CostOfRevenue": "cogs",
+    "GrossProfit": "gross_profit",
+    "NetIncomeLoss": "net_income",
+    "InterestExpense": "interest_expense",
+    "InterestAndDebtExpense": "interest_expense",
+    "ResearchAndDevelopmentExpense": "rd_expense",
+    "SellingGeneralAndAdministrativeExpense": "sga_expense",
+    "IncomeTaxExpenseBenefit": "income_tax",
+
+    # 现金流量表
     "NetCashProvidedByUsedInOperatingActivities": "cashflow_op",
     "PaymentsToAcquirePropertyPlantAndEquipment": "capex",
-    "AccountsReceivableNetCurrent": "receivable",
-    "InventoryNet": "inventory",
-    "NetIncomeLoss": "net_income",
-    "CashAndCashEquivalentsAtCarryingValue": "cash",
-    "Goodwill": "goodwill",
+    "PaymentsToAcquireProductiveAssets": "capex",
+    "NetCashProvidedByUsedInInvestingActivities": "cashflow_invst",
+    "NetCashProvidedByUsedInFinancingActivities": "cashflow_fin",
+    "PaymentsOfDividends": "cashflow_dividends",
+    "PaymentsOfDividendsCommonStock": "cashflow_dividends",
+    "DepreciationDepletionAndAmortization": "depreciation",
+    "DepreciationAndAmortization": "depreciation",
+    "Depreciation": "depreciation",
+
+    # 股本与股票回购
+    "CommonStockSharesOutstanding": "shares_outstanding",
+    "EntityCommonStockSharesOutstanding": "shares_outstanding",
     "PaymentsForRepurchaseOfCommonStock": "value_of_shares_reacquired_during_period",
     "StockRepurchasedAndRetiredDuringPeriodValue": "value_of_shares_reacquired_during_period",
-    "CommonStockSharesOutstanding": "shares_outstanding",
-    "LongTermDebtNoncurrent": "total_debt",
 }
 
 def extract_lakehouse_top3000():

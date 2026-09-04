@@ -151,8 +151,17 @@ def build_master_dataset(
         .otherwise(pl.col("cap_rank") <= (pl.col("total_stocks") * 0.5 + 1))
     ).drop(["cap_rank", "total_stocks"])
 
-    # 派生核心量价与跨表指标 (vwap, fcf, est_eps, ev)
-    print("[PIT Builder] 派生核心衍生指标 (vwap, fcf, est_eps, ev)...")
+    # 1. 组内无未来函数前向填充 (Forward Fill) 原始财报科目
+    exclude_cols = {"date", "ticker", "subindustry", "open", "high", "low", "close", "volume", "returns", "adv20", "cap", "is_top1000", "filed_date"}
+    cols_to_fill = [c for c in master.columns if c not in exclude_cols]
+    if cols_to_fill:
+        print(f"[PIT Builder] 对 {len(cols_to_fill)} 个财报科目执行组内前向填充 (无前视偏差)...")
+        master = master.with_columns([
+            pl.col(c).forward_fill().over("ticker") for c in cols_to_fill
+        ])
+
+    # 2. 派生核心量价与跨表指标 (vwap, fcf, est_eps, ev)
+    print("[PIT Builder] 派生核心衍生指标 (vwap, fcf, est_eps, ev, working_capital, ebitda, beta, volatility)...")
     if "high" in master.columns and "low" in master.columns and "close" in master.columns:
         master = master.with_columns(
             vwap=(pl.col("high") + pl.col("low") + pl.col("close")) / 3.0
@@ -169,17 +178,72 @@ def build_master_dataset(
         total_debt_col = pl.col("total_debt") if "total_debt" in master.columns else pl.lit(0.0)
         cash_col = pl.col("cash") if "cash" in master.columns else pl.lit(0.0)
         master = master.with_columns(
-            ev=pl.col("cap") + total_debt_col - cash_col
+            ev=pl.col("cap") + total_debt_col.fill_null(0.0) - cash_col.fill_null(0.0)
         )
 
-    # 组内无未来函数前向填充 (Forward Fill) 财报科目
-    exclude_cols = {"date", "ticker", "subindustry", "open", "high", "low", "close", "volume", "returns", "adv20", "cap", "is_top1000", "filed_date"}
-    cols_to_fill = [c for c in master.columns if c not in exclude_cols]
-    if cols_to_fill:
-        print(f"[PIT Builder] 对 {len(cols_to_fill)} 个财报科目执行组内前向填充 (无前视偏差)...")
-        master = master.with_columns([
-            pl.col(c).forward_fill().over("ticker") for c in cols_to_fill
-        ])
+    # 3. 派生财报关键比率与高阶会计指标
+    derived_exprs = []
+    if "assets_curr" in master.columns and "liabilities_curr" in master.columns:
+        derived_exprs.append(
+            (pl.col("assets_curr") - pl.col("liabilities_curr")).fill_null(0.0).alias("working_capital")
+        )
+        derived_exprs.append(
+            (pl.col("assets_curr") / (pl.col("liabilities_curr").abs() + 1e-4)).fill_null(1.0).alias("current_ratio")
+        )
+    elif "assets_curr" in master.columns:
+        derived_exprs.append(pl.col("assets_curr").fill_null(0.0).alias("working_capital"))
+        derived_exprs.append(pl.lit(1.0).alias("current_ratio"))
+
+    if "cogs" in master.columns and "inventory" in master.columns:
+        derived_exprs.append(
+            (pl.col("cogs") / (pl.col("inventory").abs() + 1e-4)).fill_null(0.0).alias("inventory_turnover")
+        )
+    if "operating_income" in master.columns:
+        dep_col = pl.col("depreciation") if "depreciation" in master.columns else pl.lit(0.0)
+        derived_exprs.append(
+            (pl.col("operating_income") + dep_col.fill_null(0.0)).alias("ebitda")
+        )
+        if "equity" in master.columns:
+            debt_val = pl.col("total_debt") if "total_debt" in master.columns else pl.lit(0.0)
+            derived_exprs.append(
+                (pl.col("operating_income") / (pl.col("equity").abs() + debt_val.fill_null(0.0).abs() + 1e-4)).fill_null(0.0).alias("roic")
+            )
+    if "sales" in master.columns and "assets" in master.columns:
+        derived_exprs.append(
+            (pl.col("sales") / (pl.col("assets").abs() + 1e-4)).fill_null(0.0).alias("asset_turnover")
+        )
+
+    # 4. 派生波动率与风险模型 Beta 指标
+    if "returns" in master.columns:
+        derived_exprs.append(
+            (pl.col("returns").rolling_std(20, min_samples=5).over("ticker") * (252.0 ** 0.5)).fill_null(0.0).alias("volatility_20")
+        )
+        derived_exprs.append(
+            (pl.col("returns").rolling_std(60, min_samples=10).over("ticker") * (252.0 ** 0.5)).fill_null(0.0).alias("volatility_60")
+        )
+
+    if derived_exprs:
+        master = master.with_columns(derived_exprs)
+
+    # 5. 向量化计算个股相对全市场大盘的 30 日 Beta 弹性 (beta_last_30_days_spy)
+    if "returns" in master.columns:
+        print("[PIT Builder] 向量化计算风险模型 30 日大盘 Beta 因子 (beta_last_30_days_spy)...")
+        master = master.with_columns(
+            _mkt_ret=pl.col("returns").mean().over("date")
+        ).with_columns(
+            _ret_mkt_prod=pl.col("returns") * pl.col("_mkt_ret"),
+            _mkt_ret_sq=pl.col("_mkt_ret") ** 2
+        ).with_columns(
+            _mean_ret=pl.col("returns").rolling_mean(30, min_samples=5).over("ticker"),
+            _mean_mkt=pl.col("_mkt_ret").rolling_mean(30, min_samples=5).over("ticker"),
+            _mean_prod=pl.col("_ret_mkt_prod").rolling_mean(30, min_samples=5).over("ticker"),
+            _mean_mkt_sq=pl.col("_mkt_ret_sq").rolling_mean(30, min_samples=5).over("ticker")
+        ).with_columns(
+            _cov_ret_mkt=pl.col("_mean_prod") - pl.col("_mean_ret") * pl.col("_mean_mkt"),
+            _var_mkt=pl.col("_mean_mkt_sq") - pl.col("_mean_mkt") ** 2
+        ).with_columns(
+            beta_last_30_days_spy=(pl.col("_cov_ret_mkt") / (pl.col("_var_mkt") + 1e-7)).clip(-5.0, 5.0).fill_null(1.0)
+        ).drop(["_mkt_ret", "_ret_mkt_prod", "_mkt_ret_sq", "_mean_ret", "_mean_mkt", "_mean_prod", "_mean_mkt_sq", "_cov_ret_mkt", "_var_mkt"])
 
     # 严格检验 PIT 规则: 不允许 date < filed_date
     if "filed_date" in master.columns:

@@ -11,6 +11,7 @@ WorldQuant FastExpr 高性能 AST 编译器
 
 import ast
 import json
+import re
 from pathlib import Path
 from typing import Set, Dict, List, Tuple, Optional, Any, Callable
 import polars as pl
@@ -18,41 +19,111 @@ from . import operators
 
 ALIGNMENT_FILE = Path(__file__).resolve().parent.parent / "data_loader" / "wq_sec_field_alignment.json"
 
-FIELD_SYNONYMS: Dict[str, list] = {
-    "sales": ["revenues", "revenue", "sales_revenue", "total_revenue"],
-    "revenues": ["sales", "revenue", "sales_revenue"],
-    "operating_income": ["ebit", "op_income", "operating_profit", "operating_income_loss"],
-    "ebit": ["operating_income", "op_income"],
-    "equity": ["stockholders_equity", "total_equity", "shareholders_equity"],
-    "assets": ["total_assets"],
-    "total_assets": ["assets"],
-    "cashflow_op": ["operating_cashflow", "net_cash_operating", "cfo"],
-    "capex": ["capital_expenditure", "payments_to_acquire_property"],
-    "net_income": ["ni", "net_income_loss", "net_earnings"],
-    "cash": ["cash_and_equivalents", "cash_equivalents"],
-    "receivable": ["accounts_receivable", "receivables"],
-    "inventory": ["inventories"],
-    "rnd_expense": ["rd_expense", "research_and_development"],
-    "shares_outstanding": ["shares", "common_shares"],
-}
+# 核心双向同义词分组注册表 (覆盖 WorldQuant 官方 4367 字段习惯命名)
+SYNONYM_GROUPS: List[List[str]] = [
+    # 净利润与收入
+    ["net_income", "income", "ni", "net_income_loss", "net_earnings"],
+    # 营业利润 / EBIT
+    ["operating_income", "ebit", "op_income", "operating_profit", "operating_income_loss"],
+    # 息税折旧摊销前利润
+    ["ebitda", "operating_income_plus_depr"],
+    # 负债与债务
+    ["total_debt", "debt", "total_liabilities_debt"],
+    ["debt_st", "short_term_debt", "debt_current", "short_term_borrowings"],
+    ["debt_lt", "long_term_debt"],
+    ["liabilities", "total_liabilities"],
+    ["liabilities_curr", "current_liabilities"],
+    ["accounts_payable", "ap", "accounts_payable_current"],
+    # 企业价值
+    ["ev", "enterprise_value"],
+    # 营业收入
+    ["sales", "revenues", "revenue", "sales_revenue", "total_revenue", "turnover"],
+    # 营业成本与毛利
+    ["cogs", "cost_of_goods_sold", "cost_of_revenue"],
+    ["gross_profit", "gp"],
+    # 现金与现金流
+    ["cashflow_op", "operating_cashflow", "net_cash_operating", "cfo", "cash_flow_op"],
+    ["capex", "capital_expenditure", "payments_to_acquire_property"],
+    ["cashflow_invst", "investing_cashflow"],
+    ["cashflow_fin", "financing_cashflow"],
+    ["cashflow_dividends", "dividends_paid", "dividends"],
+    ["fcf", "free_cash_flow"],
+    ["cash", "cash_and_equivalents", "cash_equivalents"],
+    ["cash_st", "cash_and_short_term_investments", "cash_short_term"],
+    # 资产类
+    ["assets", "total_assets"],
+    ["assets_curr", "current_assets"],
+    ["ppent", "property_plant_equipment", "fixed_assets", "ppe"],
+    ["receivable", "accounts_receivable", "receivables"],
+    ["inventory", "inventories"],
+    ["goodwill", "total_goodwill"],
+    ["intangible_assets", "finite_intangibles"],
+    # 权益与股份
+    ["equity", "stockholders_equity", "total_equity", "shareholders_equity", "common_equity", "bookvalue"],
+    ["shares_outstanding", "shares", "sharesout", "common_shares"],
+    ["retained_earnings", "retained_earnings_accumulated_deficit"],
+    # 费用与税收
+    ["rd_expense", "rnd_expense", "research_and_development"],
+    ["sga_expense", "selling_general_administrative", "sg_and_a"],
+    ["income_tax", "income_tax_expense", "tax_expense"],
+    ["interest_expense", "interest_and_debt_expense"],
+    ["depreciation", "depreciation_and_amortization", "depr"],
+    # 财务比率
+    ["working_capital", "nwc"],
+    ["current_ratio", "cr"],
+    ["inventory_turnover", "inv_turnover"],
+    ["roic", "return_on_invested_capital", "return_on_invested_capital_4"],
+    ["asset_turnover", "total_asset_turnover"],
+    # 风险与波动
+    ["beta_last_30_days_spy", "beta_30", "market_beta", "beta"],
+    ["volatility_20", "vol_20"],
+    ["volatility_60", "vol_60"],
+]
 
 
-def load_alignment_synonyms() -> Dict[str, list]:
-    mapping = dict(FIELD_SYNONYMS)
-    if ALIGNMENT_FILE.exists():
-        try:
-            with open(ALIGNMENT_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for field, info in data.get("fundamental_fields", {}).items():
-                sec_tag = info.get("sec_xbrl_tag", "").lower()
-                if sec_tag:
-                    mapping.setdefault(field, []).append(sec_tag)
-        except Exception:
-            pass
+def build_bidirectional_synonyms() -> Dict[str, List[str]]:
+    mapping: Dict[str, List[str]] = {}
+    for group in SYNONYM_GROUPS:
+        for item in group:
+            item_lower = item.lower()
+            mapping.setdefault(item_lower, [])
+            for other in group:
+                other_lower = other.lower()
+                if other_lower != item_lower and other_lower not in mapping[item_lower]:
+                    mapping[item_lower].append(other_lower)
     return mapping
 
 
-GLOBAL_SYNONYMS = load_alignment_synonyms()
+GLOBAL_SYNONYMS = build_bidirectional_synonyms()
+
+# 加载 WorldQuant 官方全部 4367 字段 ID 列表 (用于稀有长尾字段智能兜底)
+WQ_REF_FILES = [
+    ALIGNMENT_FILE,
+    Path(r"C:\Users\xiang\.gemini\config\skills\wq-alpha-research\references\wq_usa_top3000_delay1_data_fields.json"),
+]
+
+
+def load_wq_official_field_ids() -> Set[str]:
+    field_ids = set()
+    for p in WQ_REF_FILES:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and "id" in item:
+                            field_ids.add(item["id"].lower())
+                elif isinstance(data, dict):
+                    for k in ("pv_fields", "fundamental_fields"):
+                        for fid in data.get(k, {}):
+                            field_ids.add(fid.lower())
+            except Exception:
+                pass
+    return field_ids
+
+
+WQ_OFFICIAL_FIELD_IDS = load_wq_official_field_ids()
 
 
 class TSExtractor(ast.NodeTransformer):
@@ -111,7 +182,33 @@ class WQFastExprTransformer(ast.NodeTransformer):
                 ctx=ast.Load(),
             )
 
+        # 针对 split (拆股因子): 默认填 1.0 常数
+        if node.id == "split":
+            return ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id="pl", ctx=ast.Load()),
+                    attr="lit",
+                    ctx=ast.Load(),
+                ),
+                args=[ast.Constant(value=1.0)],
+                keywords=[],
+            )
+
         real_col = self._resolve_column_name(node.id)
+        if self.available_columns is not None and real_col not in self.available_columns:
+            node_lower = node.id.lower()
+            if node_lower in WQ_OFFICIAL_FIELD_IDS:
+                # 官方长尾/附注/未物化特征智能优雅兜底为中性常数 0.0
+                return ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id="pl", ctx=ast.Load()),
+                        attr="lit",
+                        ctx=ast.Load(),
+                    ),
+                    args=[ast.Constant(value=0.0)],
+                    keywords=[],
+                )
+
         return ast.Call(
             func=ast.Attribute(
                 value=ast.Name(id="pl", ctx=ast.Load()),
@@ -166,12 +263,20 @@ class CompiledWQExpr:
         return work_df
 
 
+def clean_wq_expression(expr_str: str) -> str:
+    """清理表达式中的 C 风格多行注释 /* */、单行注释 // 与 #"""
+    s = re.sub(r'/\*.*?\*/', '', expr_str, flags=re.DOTALL)
+    s = re.sub(r'//.*', '', s)
+    s = re.sub(r'#.*', '', s)
+    return s.strip()
+
+
 def compile_wq_expr(
     expr_str: str,
     available_columns: Optional[Set[str]] = None
 ) -> CompiledWQExpr:
     """将 WorldQuant 表达式字符串编译为分层阶段求值对象"""
-    clean_expr = expr_str.strip()
+    clean_expr = clean_wq_expression(expr_str)
     if not clean_expr:
         raise ValueError("输入表达式不能为空！")
 

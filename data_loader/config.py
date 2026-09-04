@@ -32,21 +32,47 @@ SEC_HEADERS = {
 
 # 核心三张表法定 XBRL 标签映射 (对齐 WorldQuant 核心字段)
 XBRL_TAGS: Dict[str, List[str]] = {
+    # 资产
     "assets": ["Assets"],
+    "assets_curr": ["AssetsCurrent"],
+    "cash": ["CashAndCashEquivalentsAtCarryingValue"],
+    "cash_st": ["CashCashEquivalentsAndShortTermInvestments"],
+    "receivable": ["AccountsReceivableNetCurrent", "AccountsAndOtherReceivablesNetCurrent"],
+    "inventory": ["InventoryNet"],
+    "ppent": ["PropertyPlantAndEquipmentNet"],
+    "goodwill": ["Goodwill"],
+    "intangible_assets": ["FiniteLivedIntangibleAssetsNet"],
+    
+    # 负债与权益
+    "liabilities": ["Liabilities"],
+    "liabilities_curr": ["LiabilitiesCurrent"],
     "equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+    "total_debt": ["LongTermDebtNoncurrent", "LongTermDebtCurrent"],
+    "debt_st": ["DebtCurrent", "ShortTermBorrowings"],
+    "accounts_payable": ["AccountsPayableCurrent"],
+    "retained_earnings": ["RetainedEarningsAccumulatedDeficit"],
+    
+    # 利润表
     "operating_income": ["OperatingIncomeLoss"],
     "sales": ["Revenues", "SalesRevenueNet", "RevenueFromContractWithCustomerExcludingAssessedTax"],
     "cogs": ["CostOfGoodsAndServicesSold", "CostOfRevenue"],
+    "gross_profit": ["GrossProfit"],
+    "net_income": ["NetIncomeLoss"],
+    "interest_expense": ["InterestExpense", "InterestAndDebtExpense"],
+    "rd_expense": ["ResearchAndDevelopmentExpense"],
+    "sga_expense": ["SellingGeneralAndAdministrativeExpense"],
+    "income_tax": ["IncomeTaxExpenseBenefit"],
+    
+    # 现金流量表
     "cashflow_op": ["NetCashProvidedByUsedInOperatingActivities"],
     "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
-    "receivable": ["AccountsReceivableNetCurrent", "AccountsAndOtherReceivablesNetCurrent"],
-    "inventory": ["InventoryNet"],
-    "net_income": ["NetIncomeLoss"],
-    "cash": ["CashAndCashEquivalentsAtCarryingValue"],
+    "cashflow_invst": ["NetCashProvidedByUsedInInvestingActivities"],
+    "cashflow_fin": ["NetCashProvidedByUsedInFinancingActivities"],
+    "cashflow_dividends": ["PaymentsOfDividends", "PaymentsOfDividendsCommonStock"],
+    "depreciation": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization", "Depreciation"],
+    
+    # 股本与回购
     "shares_outstanding": ["CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding"],
-    "rnd_expense": ["ResearchAndDevelopmentExpense"],
-    "total_debt": ["LongTermDebtNoncurrent", "LongTermDebtCurrent"],
-    "goodwill": ["Goodwill"],
     "value_of_shares_reacquired_during_period": [
         "PaymentsForRepurchaseOfCommonStock",
         "StockRepurchasedAndRetiredDuringPeriodValue",

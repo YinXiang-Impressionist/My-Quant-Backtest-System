@@ -1,4 +1,4 @@
-﻿"""
+"""
 全量字段对齐映射字典构建器 (Field Mapping Alignment Generator)
 整合：
 1. 195 个 PV 价量字段数学公式与基础对齐
@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-BASE_DIR = Path(r"C:\Users\xiang\.gemini\antigravity\scratch\wq_local_backtest")
+BASE_DIR = Path(__file__).resolve().parent.parent
 REF_JSON = Path(r"C:\Users\xiang\.gemini\config\skills\wq-alpha-research\references\wq_usa_top3000_delay1_data_fields.json")
 OUTPUT_JSON = BASE_DIR / "data_loader" / "wq_sec_field_alignment.json"
 
