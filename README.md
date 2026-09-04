@@ -1,10 +1,15 @@
 # WorldQuant BRAIN Local Fast Backtest Engine (USA TOP3000)
 
+[![GitHub Repo](https://img.shields.io/badge/GitHub-my--quant--backtest--system-blue.svg)](https://github.com/YinXiang-Impressionist/my-quant-backtest-system)
+[![Engine Speed](https://img.shields.io/badge/Simulation-<20ms-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+
 针对 **WorldQuant BRAIN (USA TOP3000)** 的超快速（**<20ms**）、高保真、零未来函数、全量 59 维特征湖仓、完全离线的本地量化回测与因子初筛引擎。
 
-配备功能完备的 **CLI 命令行工具矩阵**，并提供可独立部署的轻量化暗黑风格 **Web GUI** 交易终端。
+配备功能完备的 **CLI 命令行工具矩阵**，支持单因子极速回测、批量初筛排行榜与自相关性红线拦截。
 
 ---
+
 
 ## 🌟 核心特性与架构设计
 
