@@ -1,8 +1,0 @@
-id,expression,sharpe,fitness,turnover,sub_universe_sharpe,status
-Batch_Alpha_002,"0.5 * group_rank(ts_rank(operating_income / equity, 126), subindustry) + 0.5 * group_rank(ts_rank(cashflow_op / assets, 126), subindustry)",3.252,4.797,0.1289,0.137,FAIL
-Batch_Alpha_001,"group_rank(ts_rank(operating_income / equity, 126), subindustry)",2.398,3.161,0.1342,-0.546,FAIL
-Batch_Alpha_004,"group_rank(ts_delta(cashflow_op / assets, 20), subindustry)",0.711,0.393,0.29,1.026,FAIL
-Batch_Alpha_007,"group_rank(ts_decay_linear(returns * adv20, 20), subindustry)",0.208,0.061,0.1705,-0.124,FAIL
-Batch_Alpha_005,"group_rank(ts_zscore(operating_income / equity, 60), subindustry)",-0.058,-0.011,0.0835,-0.626,FAIL
-Batch_Alpha_006,"-1.0 * group_rank(ts_decay_linear(returns, 10), subindustry)",-0.189,-0.045,0.2436,0.043,FAIL
-Batch_Alpha_003,"group_rank(ts_decay_linear(sales / assets, 63), subindustry)",-4.379,-6.763,0.1657,-1.863,FAIL

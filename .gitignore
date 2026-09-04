@@ -39,3 +39,9 @@ data/raw_sec/
 data/*.parquet
 !data/committed_alphas_pnl.parquet
 
+# Generated Outputs & Exports
+*.csv
+mined_qualifying_alphas.csv
+qualifying_alphas.csv
+
+
