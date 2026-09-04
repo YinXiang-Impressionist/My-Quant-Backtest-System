@@ -13,6 +13,8 @@ CURRENT_FILE = Path(__file__).resolve()
 POSSIBLE_ROOTS = [
     CURRENT_FILE.parent.parent.parent.parent, # .agents/skills/wq-local-alpha-engine/scripts -> root
     CURRENT_FILE.parent.parent.parent,        # skills/wq-local-alpha-engine/scripts -> root
+    Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui"),
+    Path(r"d:\AAA Every Coding Project\Quant Backtest Project\My Quant Backtest System"),
     Path(r"d:\My Quant Backtest System"),
 ]
 
