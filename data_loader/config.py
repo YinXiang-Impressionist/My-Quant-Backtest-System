@@ -35,21 +35,30 @@ def ensure_workspace_dirs():
 
 # 3. 智能解析 59 维 Lakehouse 宽表数据源 (只读)
 def resolve_master_path() -> Path:
+    # 1. 优先支持环境变量 (方便 CI/CD 或容器自定义指定)
     env_path = os.getenv("WQ_MASTER_PATH")
     if env_path and Path(env_path).exists():
-        return Path(env_path)
+        return Path(env_path).resolve()
 
+    # 2. 自适应探测路径 (当前工作目录、当前模块根目录、同级兄弟工程目录及全局技能库)
     candidates = [
         WORKSPACE_DIR / "data" / "master_backtest.parquet",
         BASE_DIR / "data" / "master_backtest.parquet",
-        Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui\data\master_backtest.parquet"),
-        Path(r"d:\AAA Every Coding Project\Quant Backtest Project\My Quant Backtest System\data\master_backtest.parquet"),
-        Path.home() / ".gemini" / "config" / "skills" / "wq-local-alpha-engine" / "data" / "master_backtest.parquet",
     ]
+
+    # 自动探测同级兄弟工程目录
+    if BASE_DIR.parent.exists():
+        for sibling in BASE_DIR.parent.iterdir():
+            if sibling.is_dir() and sibling != BASE_DIR:
+                candidates.append(sibling / "data" / "master_backtest.parquet")
+
+    # 全局技能库备选探测
+    candidates.append(Path.home() / ".gemini" / "config" / "skills" / "wq-local-alpha-engine" / "data" / "master_backtest.parquet")
+
     for p in candidates:
         if p.exists():
-            return p
-    return BASE_DIR / "data" / "master_backtest.parquet"
+            return p.resolve()
+    return (BASE_DIR / "data" / "master_backtest.parquet").resolve()
 
 
 MASTER_PATH = resolve_master_path()
@@ -59,16 +68,23 @@ RAW_SEC_DIR = DATA_DIR / "raw_sec"
 PV_PATH = DATA_DIR / "pv_daily.parquet"
 FUND_PATH = DATA_DIR / "fundamentals_top3000.parquet" if (DATA_DIR / "fundamentals_top3000.parquet").exists() else DATA_DIR / "fundamentals.parquet"
 
-# 对齐字典路径
+# 对齐字典路径 (完全动态探测)
 ALIGNMENT_PATH = BASE_DIR / "data_loader" / "wq_sec_field_alignment.json"
 if not ALIGNMENT_PATH.exists():
-    for cand in [
+    align_candidates = [
         WORKSPACE_DIR / "data_loader" / "wq_sec_field_alignment.json",
-        Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui\data_loader\wq_sec_field_alignment.json"),
-    ]:
+    ]
+    if BASE_DIR.parent.exists():
+        for sibling in BASE_DIR.parent.iterdir():
+            if sibling.is_dir() and sibling != BASE_DIR:
+                align_candidates.append(sibling / "data_loader" / "wq_sec_field_alignment.json")
+    align_candidates.append(Path.home() / ".gemini" / "config" / "skills" / "wq-local-alpha-engine" / "data_loader" / "wq_sec_field_alignment.json")
+
+    for cand in align_candidates:
         if cand.exists():
-            ALIGNMENT_PATH = cand
+            ALIGNMENT_PATH = cand.resolve()
             break
+
 
 # SEC EDGAR 请求规范
 SEC_HEADERS = {
