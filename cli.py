@@ -289,7 +289,9 @@ def main():
 
     args = parser.parse_args()
     if not args.command:
-        parser.print_help()
+        # Default to interactive wizard when no command-line flags are given
+        from run import interactive_main
+        interactive_main()
         return
 
     if args.command == "run":

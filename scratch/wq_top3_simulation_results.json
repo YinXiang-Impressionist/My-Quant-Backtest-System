@@ -1,0 +1,254 @@
+[
+  {
+    "rank": 1,
+    "tag": "Alpha_001",
+    "alpha_id": "LL9AE0km",
+    "name": "VWAP 短周期偏离反转 (20d)",
+    "expression": "group_rank(ts_rank(-(close / vwap - 1), 20), subindustry)",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 5,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.08,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "language": "FASTEXPR",
+      "visualization": false
+    },
+    "local_metrics": {
+      "sharpe": 2.27,
+      "fitness": 1.62,
+      "turnover": "76.7%"
+    },
+    "wq_online_metrics": {
+      "sharpe": 2.02,
+      "fitness": 0.71,
+      "turnover_twosided": 0.775,
+      "returns": 0.0956,
+      "drawdown": 0.0439,
+      "margin": 0.000247,
+      "checks": [
+        {
+          "name": "LOW_SHARPE",
+          "result": "PASS",
+          "limit": 1.25,
+          "value": 2.02
+        },
+        {
+          "name": "LOW_FITNESS",
+          "result": "FAIL",
+          "limit": 1.0,
+          "value": 0.71
+        },
+        {
+          "name": "LOW_TURNOVER",
+          "result": "PASS",
+          "limit": 0.01,
+          "value": 0.775
+        },
+        {
+          "name": "HIGH_TURNOVER",
+          "result": "FAIL",
+          "limit": 0.7,
+          "value": 0.775
+        },
+        {
+          "name": "CONCENTRATED_WEIGHT",
+          "result": "PASS"
+        },
+        {
+          "name": "LOW_SUB_UNIVERSE_SHARPE",
+          "result": "PASS",
+          "limit": 0.87,
+          "value": 1.13
+        },
+        {
+          "name": "SELF_CORRELATION",
+          "result": "PENDING"
+        },
+        {
+          "name": "MATCHES_COMPETITION",
+          "result": "PASS",
+          "competitions": [
+            {
+              "id": "challenge",
+              "name": "Challenge"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "rank": 2,
+    "tag": "Alpha_060_evolved",
+    "alpha_id": "LL9AmxqM",
+    "name": "VWAP反转 60% × 真实股票回购 40% (decay=10)",
+    "expression": "0.6 * group_rank(ts_rank(-(close / vwap - 1), 126), subindustry) + 0.4 * group_rank(ts_rank(value_of_shares_reacquired_during_period / cap, 252), subindustry)",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.08,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "language": "FASTEXPR",
+      "visualization": false
+    },
+    "local_metrics": {
+      "sharpe": 2.23,
+      "fitness": 1.68,
+      "turnover": "31.5%"
+    },
+    "wq_online_metrics": {
+      "sharpe": 2.12,
+      "fitness": 1.37,
+      "turnover_twosided": 0.2753,
+      "returns": 0.1154,
+      "drawdown": 0.052,
+      "margin": 0.000838,
+      "checks": [
+        {
+          "name": "LOW_SHARPE",
+          "result": "PASS",
+          "limit": 1.25,
+          "value": 2.12
+        },
+        {
+          "name": "LOW_FITNESS",
+          "result": "PASS",
+          "limit": 1.0,
+          "value": 1.37
+        },
+        {
+          "name": "LOW_TURNOVER",
+          "result": "PASS",
+          "limit": 0.01,
+          "value": 0.2753
+        },
+        {
+          "name": "HIGH_TURNOVER",
+          "result": "PASS",
+          "limit": 0.7,
+          "value": 0.2753
+        },
+        {
+          "name": "CONCENTRATED_WEIGHT",
+          "result": "PASS"
+        },
+        {
+          "name": "LOW_SUB_UNIVERSE_SHARPE",
+          "result": "PASS",
+          "limit": 0.92,
+          "value": 1.63
+        },
+        {
+          "name": "SELF_CORRELATION",
+          "result": "PENDING"
+        },
+        {
+          "name": "MATCHES_COMPETITION",
+          "result": "PASS",
+          "competitions": [
+            {
+              "id": "challenge",
+              "name": "Challenge"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "rank": 3,
+    "tag": "Alpha_003_evolved",
+    "alpha_id": "Vk6gmlP0",
+    "name": "VWAP长周期偏离反转 (126d, decay=10)",
+    "expression": "group_rank(ts_rank(-(close / vwap - 1), 126), subindustry)",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.08,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "language": "FASTEXPR",
+      "visualization": false
+    },
+    "local_metrics": {
+      "sharpe": 1.63,
+      "fitness": 1.56,
+      "turnover": "54.6%"
+    },
+    "wq_online_metrics": {
+      "sharpe": 1.84,
+      "fitness": 0.78,
+      "turnover_twosided": 0.563,
+      "returns": 0.1013,
+      "drawdown": 0.0432,
+      "margin": 0.00036,
+      "checks": [
+        {
+          "name": "LOW_SHARPE",
+          "result": "PASS",
+          "limit": 1.25,
+          "value": 1.84
+        },
+        {
+          "name": "LOW_FITNESS",
+          "result": "FAIL",
+          "limit": 1.0,
+          "value": 0.78
+        },
+        {
+          "name": "LOW_TURNOVER",
+          "result": "PASS",
+          "limit": 0.01,
+          "value": 0.563
+        },
+        {
+          "name": "HIGH_TURNOVER",
+          "result": "PASS",
+          "limit": 0.7,
+          "value": 0.563
+        },
+        {
+          "name": "CONCENTRATED_WEIGHT",
+          "result": "PASS"
+        },
+        {
+          "name": "LOW_SUB_UNIVERSE_SHARPE",
+          "result": "PASS",
+          "limit": 0.8,
+          "value": 0.95
+        },
+        {
+          "name": "SELF_CORRELATION",
+          "result": "PENDING"
+        },
+        {
+          "name": "MATCHES_COMPETITION",
+          "result": "PASS",
+          "competitions": [
+            {
+              "id": "challenge",
+              "name": "Challenge"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
