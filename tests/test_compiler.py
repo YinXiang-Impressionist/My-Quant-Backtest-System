@@ -2,6 +2,11 @@
 阶段二测试：WorldQuant AST 编译器与同义词 Fallback 单元测试
 """
 
+import sys
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 import unittest
 import datetime
 import polars as pl

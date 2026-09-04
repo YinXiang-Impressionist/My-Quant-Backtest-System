@@ -9,7 +9,8 @@ import polars as pl
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 UNIVERSE_JSON = PROJECT_DIR / "data" / "universe_top3000.json"
 MAPPING_JSON = PROJECT_DIR / "data" / "ticker_subindustry_mapping.json"
-LAKEHOUSE_SUB = Path(r"c:\Users\xiang\.gemini\antigravity-ide\scratch\stock_financial_crawler\sec_financial_lakehouse\sec_parquet\sub")
+import os
+LAKEHOUSE_SUB = Path(os.environ.get("SEC_LAKEHOUSE_SUB_DIR", PROJECT_DIR / "data" / "raw_sec_lakehouse" / "sub"))
 
 def sic_to_industry(sic_str) -> str:
     if not sic_str or not str(sic_str).isdigit():

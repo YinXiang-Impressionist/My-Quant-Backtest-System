@@ -49,6 +49,6 @@ qualifying_alphas.csv
 # Ignore large parquet files
 master_backtest.parquet
 *.parquet
-!committed_alphas_pnl.parquet
+data/committed_*
 logs/
 outputs/

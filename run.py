@@ -303,7 +303,7 @@ def run_automated_mining(sim: LocalWQSimulator):
 
     max_tests = int(Prompt.ask("How many alpha variants to generate & evaluate?", default="30"))
 
-    from scratch.run_large_scale_alpha_mining import build_factor_taxonomy
+    from engine.taxonomy import build_factor_taxonomy
     taxonomy = build_factor_taxonomy()
 
     all_factors = []

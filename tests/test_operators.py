@@ -2,6 +2,11 @@
 阶段二测试：Polars 向量化算子库完整性与数值正确性测试
 """
 
+import sys
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 import unittest
 import datetime
 import numpy as np

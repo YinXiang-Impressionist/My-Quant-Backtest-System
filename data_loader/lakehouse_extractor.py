@@ -12,7 +12,8 @@ import polars as pl
 
 # 1. 路径定位
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-LAKEHOUSE_DIR = Path(r"c:\Users\xiang\.gemini\antigravity-ide\scratch\stock_financial_crawler\sec_financial_lakehouse\sec_parquet")
+import os
+LAKEHOUSE_DIR = Path(os.environ.get("SEC_LAKEHOUSE_DIR", PROJECT_DIR / "data" / "raw_sec_lakehouse"))
 UNIVERSE_JSON = PROJECT_DIR / "data" / "universe_top3000.json"
 OUTPUT_PARQUET = PROJECT_DIR / "data" / "fundamentals_top3000.parquet"
 

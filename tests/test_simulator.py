@@ -2,6 +2,11 @@
 阶段三测试：回测仿真引擎、WorldQuant IS 规则体系与自相关性拦截测试
 """
 
+import sys
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 import unittest
 import numpy as np
 import polars as pl

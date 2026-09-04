@@ -1,31 +1,16 @@
+# -*- coding: utf-8 -*-
 """
-WorldQuant BRAIN 本地全量大规模自动化因子挖掘与层级测试系统
-按 5 大类、18 个细分子类系统化测试 50+ 个 Alpha 因子，
-并对接近阈值 (Sharpe > 1.0) 的潜力苗头自动执行多轮迭代进化，
-输出全维度 WorldQuant IS 6 项质检达标排行榜。
+WorldQuant BRAIN 量化策略分类学与多层级因子特征库 (Factor Taxonomy)
+================================================================================
+包含 5 大类、18 个细分子类，覆盖微观量价、基本面营运、现金流真实回报、
+资产负债表排雷与跨界正交双核杂交演化的全维度候选特征。
 """
 
-import sys
-import json
-import time
-from pathlib import Path
-import polars as pl
+from typing import List, Dict, Any
 
-if hasattr(sys.stdout, "reconfigure"):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_DIR))
-
-from engine.simulator import LocalWQSimulator
-from engine.correlation_checker import CorrelationChecker
-from data_loader.config import MASTER_PATH
-
-def build_factor_taxonomy():
-    """构建多层次量化策略分类树"""
+def build_factor_taxonomy() -> List[Dict[str, Any]]:
+    """构建多层次量化策略分类树与高质量因子特征库"""
     taxonomy = [
         # ==============================================================================
         # 第一大类：微观量价与流动性 (Micro Price-Volume & Liquidity)
@@ -272,130 +257,3 @@ def build_factor_taxonomy():
         }
     ]
     return taxonomy
-
-def run_large_scale_mining():
-    print("=" * 90)
-    print(">>> 启动 WorldQuant BRAIN 本地全量大规模自动化因子挖掘引擎 <<<")
-    print(f"当前数据集: {MASTER_PATH}")
-    print("目标股票池: 3,016 只全量活跃标的 (3,458,748 行数据)")
-    print("=" * 90)
-
-    t_all_start = time.time()
-    df = pl.read_parquet(MASTER_PATH)
-    sim = LocalWQSimulator(df)
-
-    taxonomy = build_factor_taxonomy()
-    
-    # 统计总数
-    total_initial_factors = sum(len(sub["factors"]) for sub in taxonomy)
-    print(f"规划策略大类: 5 大类 | 细分子类: {len(taxonomy)} 类 | 初始因子总数: {total_initial_factors} 个\n")
-
-    all_results = []
-    evolved_results = []
-    qualifying_alphas = []
-
-    tested_count = 0
-
-    for cat_idx, sub in enumerate(taxonomy, 1):
-        cat_name = sub["category"]
-        sub_name = sub["subcategory"]
-        print(f"\n【子类 {cat_idx}/{len(taxonomy)}】{cat_name} -> {sub_name} (包含 {len(sub['factors'])} 个因子)")
-        print("-" * 90)
-
-        for f_item in sub["factors"]:
-            tested_count += 1
-            f_name = f_item["name"]
-            expr = f_item["expr"]
-            decay = f_item.get("decay", 0)
-            delay = f_item.get("delay", 1)
-
-            t0 = time.time()
-            try:
-                m = sim.simulate(expr, delay=delay, decay=decay, neutralization="SUBINDUSTRY", check_corr=False)
-                run_ms = (time.time() - t0) * 1000.0
-
-                record = {
-                    "id": f"Alpha_{tested_count:03d}",
-                    "name": f_name,
-                    "category": cat_name,
-                    "subcategory": sub_name,
-                    "expression": expr,
-                    "decay": decay,
-                    "delay": delay,
-                    "sharpe": round(m.sharpe, 3),
-                    "fitness": round(m.fitness, 3),
-                    "turnover_twosided": round(m.turnover * 2.0, 3),
-                    "returns": round(m.returns, 3),
-                    "drawdown": round(m.max_drawdown, 3),
-                    "sub_sharpe": round(m.sub_universe_sharpe, 3),
-                    "is_all_passed": m.is_all_passed(),
-                    "is_checks": m.is_checks,
-                    "runtime_ms": round(run_ms, 1),
-                }
-                all_results.append(record)
-
-                status_flag = "[PASS]" if m.is_all_passed() else ("[PROMIS]" if m.sharpe >= 1.0 else "[TEST]")
-                print(f"[{record['id']}] {f_name[:24]:<24} | Sharpe: {m.sharpe:>6.2f} | Fitness: {m.fitness:>5.2f} | TO: {m.turnover*200:>5.1f}% | DD: {m.max_drawdown*100:>4.1f}% | {status_flag}")
-
-                if m.is_all_passed():
-                    qualifying_alphas.append(record)
-
-                # ======================================================================
-                # 自动迭代进化分支 (Auto-Evolution): 若 Sharpe >= 1.0，自动微调参数追求满贯
-                # ======================================================================
-                if m.sharpe >= 1.0 and not m.is_all_passed():
-                    # 尝试增加平滑衰减 decay 调低换手率与回撤
-                    for mut_decay in [10, 15, 20]:
-                        if mut_decay == decay:
-                            continue
-                        m_mut = sim.simulate(expr, delay=delay, decay=mut_decay, neutralization="SUBINDUSTRY", check_corr=False)
-                        if m_mut.sharpe > m.sharpe or (m_mut.sharpe >= 1.25 and m_mut.is_all_passed()):
-                            mut_record = {
-                                "id": f"{record['id']}_evolved",
-                                "name": f"{f_name} (变异 decay={mut_decay})",
-                                "category": cat_name,
-                                "subcategory": sub_name,
-                                "expression": expr,
-                                "decay": mut_decay,
-                                "delay": delay,
-                                "sharpe": round(m_mut.sharpe, 3),
-                                "fitness": round(m_mut.fitness, 3),
-                                "turnover_twosided": round(m_mut.turnover * 2.0, 3),
-                                "returns": round(m_mut.returns, 3),
-                                "drawdown": round(m_mut.max_drawdown, 3),
-                                "sub_sharpe": round(m_mut.sub_universe_sharpe, 3),
-                                "is_all_passed": m_mut.is_all_passed(),
-                                "is_checks": m_mut.is_checks,
-                                "runtime_ms": round(m_mut.runtime_ms, 1),
-                            }
-                            evolved_results.append(mut_record)
-                            all_results.append(mut_record)
-                            print(f"  * [进化变异成功] decay={mut_decay} -> Sharpe: {m_mut.sharpe:.2f} | Fitness: {m_mut.fitness:.2f} | TO: {m_mut.turnover*200:.1f}%")
-                            if m_mut.is_all_passed():
-                                qualifying_alphas.append(mut_record)
-                            break
-            except Exception as e:
-                print(f"  -> 回测异常: {f_name} | {e}")
-
-    total_time = time.time() - t_all_start
-    print("\n" + "=" * 90)
-    print(f"大规模回测全量完成！")
-    print(f"总计测试因子: {len(all_results)} 个 (含 {len(evolved_results)} 个自主变异迭代因子)")
-    print(f"总耗时: {total_time:.2f} 秒 (平均单因子仅 {total_time/len(all_results)*1000:.1f} 毫秒)")
-    print(f"达标高分 Alpha 数量 (满足 WorldQuant 全部红线): {len(qualifying_alphas)} 个！")
-    print("=" * 90)
-
-    # 结果持久化
-    summary_path = Path("scratch/large_scale_mining_results.json")
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False)
-    
-    qualifying_path = Path("scratch/top_qualifying_alphas.json")
-    with open(qualifying_path, "w", encoding="utf-8") as f:
-        json.dump(qualifying_alphas, f, indent=2, ensure_ascii=False)
-
-    print(f"所有结果已落盘至: {summary_path}")
-    print(f"达标高分池已落盘至: {qualifying_path}")
-
-if __name__ == "__main__":
-    run_large_scale_mining()

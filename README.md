@@ -2,14 +2,15 @@
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-my--quant--backtest--system-blue.svg)](https://github.com/YinXiang-Impressionist/my-quant-backtest-system)
 [![Engine Speed](https://img.shields.io/badge/Simulation-<20ms-brightgreen.svg)]()
+[![Lakehouse](https://img.shields.io/badge/Dataset-3.45M%20Rows%20x%2059%20Cols-orange.svg)]()
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 针对 **WorldQuant BRAIN (USA TOP3000)** 的超快速（**<20ms**）、高保真、零未来函数、全量 59 维特征湖仓、完全离线的本地量化回测与因子初筛引擎。
 
-配备功能完备的 **CLI 命令行工具矩阵**，支持单因子极速回测、批量初筛排行榜与自相关性红线拦截。
+配备功能完备的 **CLI 命令行工具矩阵**，支持单因子极速回测、批量初筛排行榜、全层次策略分类库与自相关性红线拦截。
 
 ---
-
 
 ## 🌟 核心特性与架构设计
 
@@ -37,9 +38,9 @@
   * `shares_outstanding` $\leftrightarrow$ `shares` $\leftrightarrow$ `sharesout`
   * `beta_last_30_days_spy` $\leftrightarrow$ `beta`
   * `rd_expense` $\leftrightarrow$ `rnd_expense` 等数十种同义映射。
-* **C 风格注释清理**：原生支持 `/* 注释 */`、`//` 与 `#` 代码注释清洗。
+* **C 风格注释清洗**：原生支持 `/* 注释 */`、`//` 与 `#` 代码注释清洗。
 * **长尾未披露附注智能兜底**：自动识别官方 4367 个全量字段 ID，针对极少数长尾文本附注（如 `fn_oth_...`）自动采用中性常数 `0.0` 兜底，保障因子连续回测不崩溃。
-* **84 个真实实战 Alpha 100% 跑通**：已在真实实战因子库 (`tests/test_real_alphas.py`) 中完成 84 个复杂因子的回归测试，通过率 100%。
+* **高保真实战 Alpha 100% 跑通**：已在离线回归测试 (`tests/test_offline_real.py`) 与样本库 (`alphas_sample.txt`) 中完成复杂因子回归测试，全部指标与官方 IS 规则严格对齐。
 
 ### 4. 1:1 复刻 WorldQuant IS 6 大红线质检体系
 * **换手率 (Turnover)**：严格对齐官方双边换手定义 `0.5 * sum(|w_t - w_{t-1}|) / BookSize`，检测是否处于 1% ~ 70% 合规区间。
@@ -53,9 +54,11 @@
 ## 快速上手 (Quick Start)
 
 ### 1. 环境准备
-推荐使用 Python 3.10+，安装核心依赖：
+推荐使用 Python 3.9+，安装核心依赖：
 ```bash
 pip install polars numpy rich yfinance
+# 或在根目录下安装为可编辑包
+pip install -e .
 ```
 
 ### 2. 命令行常用指令 (CLI Matrix)
@@ -98,92 +101,88 @@ python -m cli batch --file alphas_sample.txt --export qualifying_alphas.csv --mi
 
 #### ④ 因子库自相关性深度拦截 (`check-corr`)
 ```bash
-python -m cli check-corr --expr "group_rank(ts_rank(operating_income / equity, 126), subindustry)"
+python -m cli check-corr --expr "group_rank(ts_rank(cashflow_op / assets, 126), subindustry)"
 ```
-自动与本地已提交因子库对比日收益序列，输出详细相关系数表格，若 $\ge 0.65$ 自动熔断拦截。
+严格拦截与本地已入库因子的相关性超标因子（`>= 0.65`），防止提交重复 Alpha。
 
-#### ⑤ 因子入库持久化 (`commit`)
+#### ⑤ 交互式向导终端 (`run.py`)
 ```bash
-python -m cli commit --expr "group_rank(ts_rank(fcf / cap, 60), subindustry)" --id "Alpha_FCF_Yield"
+python run.py
 ```
-
-#### ⑥ 离线数据集查看与构建 (`dataset`)
-```bash
-# 查看离线宽表样本量、标的数、时间跨度与所有字段
-python -m cli dataset --info
-
-# 重新从 SEC Lakehouse 构建全量 Parquet 宽表
-python -m cli dataset --build
-```
+调起终端可视化 Rich 菜单，提供单因子调试、经典模板调入、批量初筛、自动化假说挖掘（5 大类策略分类学）、自相关诊断、数据集探查等 8 大集成向导。
 
 ---
 
-## 📊 支持字段全景表 (59 核心字段分类)
+## 🧪 自动化测试套件 (Automated Tests)
 
-| 分类 | 核心字段（原生列名 / 自动支持的同义词别名） | 经济学含义与量化用途 |
-| :--- | :--- | :--- |
-| **基础价量 (PV)** | `close`, `open`, `high`, `low`, `volume`, `vwap`, `returns`, `cap`, `adv20`, `shares_outstanding` (`shares`, `sharesout`) | 官方价格、开高低收、量价微观结构与流动性指标 |
-| **资产负债表 - 资产类** | `assets` (`total_assets`), `assets_curr`, `cash` (`cash_and_equivalents`), `cash_st`, `receivable`, `inventory`, `ppent` (`ppe`), `goodwill`, `intangible_assets` | 规模基准、营运资本、资产重估、应计盈余与商誉风险 |
-| **资产负债表 - 负债与权益** | `liabilities` (`total_liabilities`), `liabilities_curr`, `total_debt` (`debt`), `debt_st`, `accounts_payable` (`ap`), `equity` (`stockholders_equity`, `bookvalue`), `retained_earnings` | 杠杆率、短期偿债压力、商业信用溢价与股东权益 |
-| **利润表** | `sales` (`revenues`, `turnover`), `cogs`, `gross_profit` (`gp`), `operating_income` (`ebit`), `net_income` (`income`, `ni`), `interest_expense`, `rd_expense` (`rnd_expense`), `sga_expense`, `income_tax` | 营收增长、毛利率、核心 EBIT 造血能力、研发投入与费用控制 |
-| **现金流量表** | `cashflow_op` (`cfo`), `capex`, `fcf`, `cashflow_invst`, `cashflow_fin`, `cashflow_dividends` (`dividends`), `depreciation` (`depr`), `value_of_shares_reacquired_during_period` | 经营现金流真金白银、资本支出、自由现金流、分红与股票回购 |
-| **财务比率与估值** | `working_capital` (`nwc`), `current_ratio` (`cr`), `inventory_turnover`, `ebitda`, `roic`, `asset_turnover`, `ev` (`enterprise_value`), `est_eps` | 净营运资本、巴菲特 ROIC 护城河、杜邦分析、企业价值与预期修正 |
-| **风险模型与波动率** | `beta_last_30_days_spy` (`beta`), `volatility_20`, `volatility_60` | 相对标普 500 的 30 日滚动 Beta、短周期与中周期已实现年化波动率 |
-| **截面与分组标识** | `ticker`, `date`, `filed_date`, `subindustry`, `is_top1000` | 标的代码、时间戳、财报法定披露日、GICS 中性化分组与大盘标记 |
-
-> 完整中英文映射、SEC XBRL 标签对照及经典因子公式请查阅 [fields_summary.md](skills/wq-local-alpha-engine/references/fields_summary.md)。
-
----
-
-## 🧪 自动化测试与质量保障
-
-项目配备了严格的自动化单元测试与回归套件：
+项目配备了严格的自动化单元测试与回归套件，支持单文件直接运行或批量发现：
 ```bash
-# 运行单元测试套件
+# 1. 运行 AST 编译器与同义词测试
+python tests/test_compiler.py
+
+# 2. 运行向量化算子数学精确度测试
+python tests/test_operators.py
+
+# 3. 运行数据管道与 PIT 规则检验
+python tests/test_data_pipeline.py
+
+# 4. 运行回测仿真器与 IS 规则测试
+python tests/test_simulator.py
+
+# 5. 运行百万行全量宽表现场回归基准测试
+python tests/test_offline_real.py
+
+# 6. 一键批量运行所有单元测试
 python -m unittest discover -s tests -p "test_*.py"
-
-# 运行用户真实账户 84 个 Alpha 全量回归测试
-python tests/test_real_alphas.py
 ```
-
-**测试覆盖矩阵**：
-1. **数据管道与 PIT 规则**：验证财报数据前向对齐无未来函数；
-2. **向量化算子库**：测试 `ts_*` 时序算子与 `group_*` 截面算子的数学精确度；
-3. **AST 编译器与同义词 Fallback**：测试双向别名自动替换与注释清洗；
-4. **回测仿真器**：验证换手率、中性化、极值截断、Sub-universe 穿透及自相关性熔断机制；
-5. **真实因子压测**：84 个实战复杂因子 **100% 跑通，0 异常**。
 
 ---
 
 ## 📁 项目工程结构
 
 ```text
-├── cli.py                              # 统一命令行接口 (run, batch, check-corr, commit, dataset, fields)
-├── run.py                              # 交互式向导脚本与精选因子模板
+my-quant-backtest-system/
+├── cli.py                              # 统一高性能命令行接口 (run, batch, check-corr, commit, dataset, fields)
+├── run.py                              # 交互式向导脚本与策略分类树调入
+├── pyproject.toml                      # PEP 621 标准项目元数据与构建配置
+├── LICENSE                             # Apache 2.0 开源许可协议
+├── README.md                           # 项目说明文档
+├── alphas_sample.txt                   # 经典高分 Alpha 因子样例清单
 ├── data/
-│   ├── master_backtest.parquet         # 核心离线全量宽表 (345万行 x 59列)
-│   └── committed_alphas.json           # 本地已入库因子的日收益序列与元数据
+│   ├── master_backtest.parquet         # 核心离线全量宽表 (345万行 x 59列, Point-in-Time)
+│   ├── ticker_subindustry_mapping.json # GICS Subindustry 行业聚类对照表
+│   └── universe_top3000.json           # 美股 TOP3000 成分股全量代码池
 ├── data_loader/
-│   ├── config.py                       # 路径配置与 22 US-GAAP 财报标签注册表
-│   ├── lakehouse_extractor.py          # SEC Lakehouse 高效透视抽取器
-│   ├── build_master_dataset.py         # 宽表合并构建与衍生特征计算
+│   ├── config.py                       # 自适应路径探测与 22 US-GAAP 财报标签注册表
+│   ├── lakehouse_extractor.py          # SEC Lakehouse 高效透视抽取器 (无前视偏差)
+│   ├── build_master_dataset.py         # 宽表合并构建与衍生特征向量化计算
 │   └── wq_sec_field_alignment.json     # 1652个基本面+195个量价字段对齐字典
 ├── engine/
 │   ├── expr_compiler.py                # FastExpr Staged Pipeline AST 编译器与同义词映射
 │   ├── operators.py                    # 向量化算子库 (ts_*, group_*, rank, ts_zscore 等)
 │   ├── simulator.py                    # 核心回测仿真器 (Turnover, PnL, Sharpe, Margin)
-│   ├── correlation_checker.py          # 因子自相关性检测器 (0.65 熔断机制)
+│   ├── correlation_checker.py          # 因子日收益自相关性检测器 (0.65 熔断拦截)
+│   ├── taxonomy.py                     # 5 大类、18 个细分子类的多层级因子特征库
 │   ├── visualizer.py                   # Rich 终端富文本报告与排行榜渲染器
 │   └── wq_api.py                       # WorldQuant 官方接口客户端与提交单导出
-├── skills/wq-local-alpha-engine/
-│   ├── SKILL.md                        # 本地量化 Agent 自动化操作指引
-│   └── references/fields_summary.md    # 59 个字段与 SEC 标签对照速查手册
 └── tests/
-    ├── test_engine.py                  # 核心功能单元测试套件
-    └── test_real_alphas.py             # 84 个用户真实 Alpha 因子全量回归压测套件
+    ├── test_compiler.py                # AST 语法树解析与同义词单元测试
+    ├── test_operators.py               # 向量化算子数值正确性测试
+    ├── test_simulator.py               # 回测仿真器与 IS 质检逻辑测试
+    ├── test_data_pipeline.py           # 数据湖仓与特征构建管道测试
+    ├── test_offline_real.py            # 离线真实高分因子真机回归测试
+    └── test_benchmark.py               # 纳秒级吞吐量基准压测脚本
 ```
 
 ---
 
-## 📄 License
-MIT License.
+## 🌐 家族项目矩阵 (Ecosystem)
+
+* 🖥️ **Web 交易终端版本**：[My Quant Backtest System GUI](https://github.com/YinXiang-Impressionist/my-quant-backtest-system-gui) —— 纯 Python 标准库驱动，内置 SVG 交互净值曲线、暗黑终端与字段词典抽屉。
+* 🤖 **AI Agent 智能体技能库**：[WorldQuant Local Alpha Research Skill](https://github.com/YinXiang-Impressionist/worldquant-local-alpha-research-skill) —— 专为 Google Antigravity、Claude Code 打造的闭环自进化因子挖掘 Skill。
+
+---
+
+## 📄 开源许可证 (License)
+
+本项目采用 [Apache License 2.0](LICENSE) 开源许可证。

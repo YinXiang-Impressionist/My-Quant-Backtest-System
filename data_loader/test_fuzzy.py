@@ -2,11 +2,13 @@
 from pathlib import Path
 from rapidfuzz import fuzz
 
-p = Path(r"C:\Users\xiang\.gemini\config\skills\wq-alpha-research\references\wq_usa_top3000_delay1_data_fields.json")
+import os
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+p = Path(os.environ.get("WQ_FIELDS_JSON", PROJECT_DIR / "data_loader" / "wq_sec_field_alignment.json"))
 wq_fields = json.loads(p.read_text(encoding="utf-8"))
 f2 = [f for f in wq_fields if f.get("dataset", {}).get("id") == "fundamental2"]
 
-raw_sec_dir = Path(r"C:\Users\xiang\.gemini\antigravity\scratch\wq_local_backtest\data\raw_sec")
+raw_sec_dir = Path(os.environ.get("RAW_SEC_DIR", PROJECT_DIR / "data" / "raw_sec"))
 sec_labels = {}
 for jf in raw_sec_dir.glob("*.json"):
     try:
