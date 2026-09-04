@@ -244,6 +244,12 @@ def cmd_dataset(args):
         console.print(f"可用字段: {', '.join(df.columns)}")
 
 
+def cmd_gui(args):
+    """启动本地图形化回测界面"""
+    from gui import start_gui
+    start_gui(host=args.host, port=args.port, open_browser=not args.no_browser)
+
+
 def main():
     parser = argparse.ArgumentParser(description="WorldQuant BRAIN 本地极速量化回测与初筛引擎")
     subparsers = parser.add_subparsers(dest="command", help="子命令")
@@ -287,6 +293,12 @@ def main():
     ds_parser.add_argument("--info", action="store_true", help="查看数据集概况")
     ds_parser.add_argument("--build", action="store_true", help="重新构建全量数据集")
 
+    # 6. gui 命令
+    gui_parser = subparsers.add_parser("gui", help="启动本地图形化回测界面 (Web GUI)")
+    gui_parser.add_argument("--host", type=str, default="127.0.0.1", help="绑定主机地址 (默认: 127.0.0.1)")
+    gui_parser.add_argument("--port", type=int, default=8888, help="服务端口号 (默认: 8888)")
+    gui_parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+
     args = parser.parse_args()
     if not args.command:
         # Default to interactive wizard when no command-line flags are given
@@ -304,6 +316,8 @@ def main():
         cmd_commit(args)
     elif args.command == "dataset":
         cmd_dataset(args)
+    elif args.command == "gui":
+        cmd_gui(args)
 
 
 if __name__ == "__main__":

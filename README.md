@@ -64,6 +64,14 @@ python -m cli check-corr --expr "group_rank(ts_rank(operating_income / equity, 1
 python -m cli dataset --info
 ```
 
+#### ⑤ 本地轻量化图形界面 (WorldQuant BRAIN Web GUI)
+```bash
+python gui.py
+# 或通过 CLI 子命令启动
+python -m cli gui --port 8888
+```
+一键调起浏览器，在暗黑沉浸式极客界面中可视化编写表达式、实时调整 Delay/Neutralization/Decay/Truncation 等参数，秒级查看 IS 6 项红线质检报告与 PnL 累计收益矢量净值曲线。
+
 ---
 
 ## 运行自动化测试

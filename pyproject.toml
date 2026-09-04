@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wq-local-engine"
-version = "1.0.0"
+version = "1.1.0"
 description = "Ultra-Fast (<20ms) Offline WorldQuant BRAIN Backtest and Alpha Screening Engine"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -23,4 +23,4 @@ wq-backtest = "cli:main"
 
 [tool.setuptools]
 packages = ["data_loader", "engine"]
-py-modules = ["cli"]
+py-modules = ["cli", "gui"]

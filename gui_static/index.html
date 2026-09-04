@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WorldQuant BRAIN - Local Alpha Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="alpha-logo">α</div>
+      <div class="tab-item active">
+        <span id="tab-alpha-name">Simulation 1</span>
+        <span class="tab-status-dot"></span>
+      </div>
+      <button id="btn-open-settings" class="btn-settings" title="配置仿真参数">
+        <svg class="icon-gear" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+      <div id="settings-summary-tag" class="settings-tag" title="当前仿真设定">
+        USA / D1 / SUBINDUSTRY / T0.08
+      </div>
+    </div>
+
+    <div class="header-right">
+      <nav class="view-nav">
+        <button id="nav-code" class="nav-btn active" data-view="code">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+          CODE
+        </button>
+        <button id="nav-results" class="nav-btn" data-view="results">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          RESULTS
+          <span id="results-badge" class="badge-dot hidden"></span>
+        </button>
+      </nav>
+      <div class="engine-badge" id="engine-status" title="本地内存仿真器已就绪">
+        <span class="status-indicator live"></span>
+        <span id="engine-status-text">Engine Ready (&lt;20ms)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspaces Container -->
+  <main class="main-container">
+
+    <!-- VIEW 1: CODE EDITOR -->
+    <section id="view-code" class="workspace-view active">
+      <div class="editor-header-bar">
+        <div class="editor-title">
+          <span>FAST EXPRESSION</span>
+          <span class="subtext">支持 WorldQuant 语法、截面中性化算子与 SEC EDGAR 点时基本面字段</span>
+        </div>
+        <button id="btn-toggle-fields" class="btn-ghost-sm" title="查看支持的字段与算子列表">
+          📖 字段与算子词典
+        </button>
+      </div>
+
+      <!-- Code Area with Line Numbers -->
+      <div class="editor-container">
+        <div id="line-numbers" class="line-numbers">1</div>
+        <textarea id="code-editor" class="code-textarea" spellcheck="false" placeholder="输入 WorldQuant 因子表达式，例如：rank(ts_decay_linear(volume / adv20, 10))">rank(ts_decay_linear(volume / adv20, 10))</textarea>
+      </div>
+
+      <!-- Collapsible Fields Cheat Sheet -->
+      <aside id="fields-drawer" class="fields-drawer collapsed">
+        <div class="drawer-header">
+          <span>常用基本面与价量字段 & 算子</span>
+          <button id="btn-close-fields" class="btn-close-drawer">✕</button>
+        </div>
+        <div class="drawer-content">
+          <div class="field-group">
+            <div class="field-cat">价量指标 (PV)</div>
+            <div class="field-tags">
+              <span class="tag" data-insert="close">close</span>
+              <span class="tag" data-insert="returns">returns</span>
+              <span class="tag" data-insert="volume">volume</span>
+              <span class="tag" data-insert="adv20">adv20</span>
+              <span class="tag" data-insert="vwap">vwap</span>
+              <span class="tag" data-insert="cap">cap</span>
+            </div>
+          </div>
+          <div class="field-group">
+            <div class="field-cat">SEC EDGAR 点时基本面 (Point-in-Time)</div>
+            <div class="field-tags">
+              <span class="tag" data-insert="operating_income">operating_income</span>
+              <span class="tag" data-insert="equity">equity</span>
+              <span class="tag" data-insert="sales">sales</span>
+              <span class="tag" data-insert="cashflow_op">cashflow_op</span>
+              <span class="tag" data-insert="assets">assets</span>
+              <span class="tag" data-insert="net_income">net_income</span>
+              <span class="tag" data-insert="cogs">cogs</span>
+              <span class="tag" data-insert="receivable">receivable</span>
+              <span class="tag" data-insert="inventory">inventory</span>
+              <span class="tag" data-insert="total_debt">total_debt</span>
+            </div>
+          </div>
+          <div class="field-group">
+            <div class="field-cat">WorldQuant 常用算子</div>
+            <div class="field-tags">
+              <span class="tag" data-insert="rank()">rank(x)</span>
+              <span class="tag" data-insert="group_rank(, subindustry)">group_rank(x, subindustry)</span>
+              <span class="tag" data-insert="ts_decay_linear(, 10)">ts_decay_linear(x, d)</span>
+              <span class="tag" data-insert="ts_rank(, 126)">ts_rank(x, d)</span>
+              <span class="tag" data-insert="ts_delay(, 1)">ts_delay(x, d)</span>
+              <span class="tag" data-insert="ts_corr(, , 10)">ts_corr(x, y, d)</span>
+              <span class="tag" data-insert="ts_delta(, 1)">ts_delta(x, d)</span>
+              <span class="tag" data-insert="group_neutralize(, subindustry)">group_neutralize(x, g)</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Bottom Action Toolbar -->
+      <footer class="bottom-toolbar">
+        <div class="toolbar-left">
+          <button id="btn-open-examples" class="btn-secondary" title="选择经典示例因子">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+            </svg>
+            <span>Example</span>
+          </button>
+          <span class="shortcut-tip">提示: 按 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 极速回测</span>
+        </div>
+
+        <div class="toolbar-right">
+          <button id="btn-simulate" class="btn-primary">
+            <span class="sim-spinner hidden"></span>
+            <span class="btn-text">Simulate</span>
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- VIEW 2: RESULTS & REPORT -->
+    <section id="view-results" class="workspace-view">
+      <div class="results-header-bar">
+        <div class="results-title-group">
+          <h2 id="result-alpha-id" class="alpha-display-id">Alpha_Result</h2>
+          <div id="result-expression" class="alpha-display-expr">rank(ts_decay_linear(volume / adv20, 10))</div>
+        </div>
+        <div class="results-header-actions">
+          <button id="btn-back-to-code" class="btn-ghost-sm">← 返回修改代码</button>
+          <button id="btn-commit-alpha" class="btn-secondary-sm" title="入库后将在后续回测时自动进行相关性防撞预警">
+            💾 入库 (Commit)
+          </button>
+          <button id="btn-copy-expr" class="btn-ghost-sm" title="复制表达式到剪贴板">
+            📋 复制表达式
+          </button>
+        </div>
+      </div>
+
+      <!-- Execution Performance Banner -->
+      <div class="perf-banner">
+        <div class="perf-item">
+          <span class="perf-label">Engine Latency:</span>
+          <span id="res-runtime" class="perf-val highlight">-- ms</span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Universe:</span>
+          <span class="perf-val">USA TOP3000</span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Period:</span>
+          <span class="perf-val">2019 - 2023 (5 Years PIT)</span>
+        </div>
+        <div class="perf-item">
+          <span class="perf-label">Red-Line IS Verdict:</span>
+          <span id="res-verdict-badge" class="status-badge pending">PENDING</span>
+        </div>
+      </div>
+
+      <!-- Metric Cards Grid -->
+      <div class="metrics-grid">
+        <div class="metric-card" id="card-sharpe">
+          <div class="metric-label">Sharpe Ratio</div>
+          <div class="metric-value" id="res-sharpe">--</div>
+          <div class="metric-target">WQ 红线: ≥ 1.25</div>
+        </div>
+        <div class="metric-card" id="card-fitness">
+          <div class="metric-label">Fitness Score</div>
+          <div class="metric-value" id="res-fitness">--</div>
+          <div class="metric-target">WQ 红线: ≥ 1.0</div>
+        </div>
+        <div class="metric-card" id="card-turnover">
+          <div class="metric-label">Daily Turnover</div>
+          <div class="metric-value" id="res-turnover">--%</div>
+          <div class="metric-target">WQ 范围: 1.0% ~ 70%</div>
+        </div>
+        <div class="metric-card" id="card-returns">
+          <div class="metric-label">Annual Returns</div>
+          <div class="metric-value" id="res-returns">--%</div>
+          <div class="metric-target">年化无杠杆多空收益</div>
+        </div>
+        <div class="metric-card" id="card-drawdown">
+          <div class="metric-label">Max Drawdown</div>
+          <div class="metric-value" id="res-drawdown">--%</div>
+          <div class="metric-target">WQ 预警: &lt; 25%</div>
+        </div>
+        <div class="metric-card" id="card-margin">
+          <div class="metric-label">Margin (bps)</div>
+          <div class="metric-value" id="res-margin">-- bps</div>
+          <div class="metric-target">单位交易额收益基点</div>
+        </div>
+        <div class="metric-card" id="card-sub-universe">
+          <div class="metric-label">Sub-Universe Sharpe</div>
+          <div class="metric-value" id="res-sub-sharpe">--</div>
+          <div class="metric-target">TOP1000 穿透红线: ≥ 1.0</div>
+        </div>
+      </div>
+
+      <!-- IS 6 Red-Lines Quality Control Checklist -->
+      <div class="qc-section">
+        <div class="section-title">WorldQuant BRAIN In-Sample (IS) 6项红线质检报告</div>
+        <div class="qc-grid" id="qc-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Equity Curve Section -->
+      <div class="chart-section">
+        <div class="chart-header">
+          <div class="section-title">Cumulative Return (PnL) Equity Curve</div>
+          <div class="chart-legend">
+            <span class="legend-dot"></span>
+            <span>Alpha Strategy PnL</span>
+          </div>
+        </div>
+        <div class="chart-container" id="chart-container">
+          <svg id="pnl-svg" class="pnl-svg" viewBox="0 0 1000 320" preserveAspectRatio="none">
+            <!-- Chart path dynamically drawn -->
+          </svg>
+          <div id="chart-tooltip" class="chart-tooltip hidden"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: SIMULATION SETTINGS -->
+  <dialog id="settings-dialog" class="settings-modal" closedby="any">
+    <div class="modal-card wq-settings-card">
+      <div class="modal-header">
+        <div class="modal-header-title-box">
+          <h3 id="modal-settings-title">Simulation 1 Settings</h3>
+          <div class="modal-header-divider"></div>
+        </div>
+        <button id="btn-close-modal" class="btn-close-modal" title="关闭">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-grid-wq">
+          <!-- Row 1 -->
+          <div class="form-item">
+            <label for="cfg-language">LANGUAGE <span class="label-dot">●</span></label>
+            <select id="cfg-language" class="form-select" disabled>
+              <option selected>Fast Expression</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="cfg-instrument">INSTRUMENT TYPE <span class="label-dot">●</span></label>
+            <select id="cfg-instrument" class="form-select" disabled>
+              <option selected>Equity</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="cfg-alpha-id">ALPHA NAME / ID <span class="label-dot">●</span></label>
+            <input type="text" id="cfg-alpha-id" class="form-input" value="Alpha_01" placeholder="Alpha_01">
+          </div>
+
+          <!-- Row 2 -->
+          <div class="form-item">
+            <label for="cfg-region">REGION <span class="label-dot">●</span></label>
+            <select id="cfg-region" class="form-select" disabled>
+              <option selected>USA</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="cfg-delay">DELAY <span class="label-dot">●</span></label>
+            <input type="number" id="cfg-delay" class="form-input" value="1" min="0" max="30" step="1" placeholder="1">
+          </div>
+          <div class="form-item">
+            <label for="cfg-universe">UNIVERSE <span class="label-dot">●</span></label>
+            <select id="cfg-universe" class="form-select" disabled>
+              <option selected>TOP3000</option>
+            </select>
+          </div>
+
+          <!-- Row 3 -->
+          <div class="form-item">
+            <label for="cfg-neutralization">NEUTRALIZATION <span class="label-dot">●</span></label>
+            <select id="cfg-neutralization" class="form-select">
+              <option value="SUBINDUSTRY" selected>Subindustry</option>
+              <option value="MARKET">Market</option>
+              <option value="SECTOR">Sector</option>
+              <option value="INDUSTRY">Industry</option>
+              <option value="NONE">None</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="cfg-decay">DECAY <span class="label-dot">●</span></label>
+            <input type="number" id="cfg-decay" class="form-input" value="0" min="0" max="100" step="1" placeholder="0">
+          </div>
+          <div class="form-item">
+            <label for="cfg-truncation">TRUNCATION <span class="label-dot">●</span></label>
+            <input type="number" id="cfg-truncation" class="form-input" value="0.08" min="0.001" max="1.0" step="0.01" placeholder="0.08">
+          </div>
+        </div>
+
+        <div class="form-checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-check-corr" checked>
+            <span>开启已入库因子自相关性熔断预检 (Self-Correlation &lt; 0.65)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer wq-modal-footer">
+        <button id="btn-reset-settings" class="btn-wq-blue">Save as Default</button>
+        <button id="btn-apply-settings" class="btn-wq-green">Apply</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- MODAL: EXAMPLE TEMPLATES PICKER -->
+  <dialog id="examples-dialog" class="examples-modal" closedby="any">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>Curated Alpha Strategy Templates</h3>
+        <button id="btn-close-examples" class="btn-close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-tip">点击任意经过严格 IS 验证的精选高分因子表达式即可快速填入编辑器：</p>
+        <div id="template-list" class="template-list">
+          <!-- Populated from backend -->
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Toast Notifications -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
