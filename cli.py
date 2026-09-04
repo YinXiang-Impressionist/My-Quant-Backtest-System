@@ -227,10 +227,167 @@ def cmd_commit(args):
     console.print(f"[green]✔ 因子 '{alpha_id}' 已成功写入本地因子库: {COMMITTED_ALPHAS_PATH}[/green]")
 
 
+FIELD_CATALOG = [
+    {
+        "category": "行情量价 (Price-Volume)",
+        "fields": [
+            ("close", "当日收盘价", "基准价格信号，close / ts_delay(close, 1)"),
+            ("open", "当日开盘价", "日内跳空与价差 (close - open) / open"),
+            ("high", "当日最高价", "波动振幅 (high - low) / close"),
+            ("low", "当日最低价", "低点支撑与反转信号"),
+            ("volume", "当日成交量", "成交量量能指标"),
+            ("vwap", "成交量加权平均价", "微观结构基准价格，(vwap - close) / close"),
+            ("returns", "当日收益率", "close / ts_delay(close, 1) - 1"),
+            ("cap", "总市值", "单位: USD，cap > 1e9"),
+            ("adv20", "20日日均成交额", "流动性加权与过滤"),
+            ("shares_outstanding", "发行在外普通股股数", "别名: shares, sharesout"),
+        ]
+    },
+    {
+        "category": "资产负债表 - 资产类 (Assets)",
+        "fields": [
+            ("assets", "总资产 (Assets)", "别名: total_assets，ROA分母"),
+            ("assets_curr", "流动资产 (Current Assets)", "别名: current_assets，短期偿债能力"),
+            ("cash", "货币资金与等价物", "别名: cash_and_equivalents，安全边际"),
+            ("cash_st", "现金与短期投资", "别名: cash_and_short_term_investments"),
+            ("receivable", "应收账款净额", "别名: accounts_receivable，盈余质量与回款周期"),
+            ("inventory", "存货净额", "别名: inventories，存货周转率分母"),
+            ("ppent", "固定资产净额 (PPE Net)", "别名: fixed_assets, ppe，重资产重估"),
+            ("goodwill", "商誉净额", "别名: total_goodwill，并购溢价与减值风险"),
+            ("intangible_assets", "无形资产", "别名: finite_intangibles"),
+        ]
+    },
+    {
+        "category": "资产负债表 - 负债与权益 (Liabilities & Equity)",
+        "fields": [
+            ("liabilities", "总负债 (Total Liabilities)", "杠杆率分母，liabilities / assets"),
+            ("liabilities_curr", "流动负债 (Current Liabilities)", "短期偿债压力"),
+            ("total_debt", "总有息负债", "别名: debt，财务杠杆风险"),
+            ("debt_st", "短期有息债务", "别名: short_term_debt，到期偿付压力"),
+            ("accounts_payable", "应付账款", "别名: ap，商业信用与上下游议价力"),
+            ("equity", "股东权益 / 净资产", "别名: stockholders_equity, bookvalue，ROE分母"),
+            ("retained_earnings", "留存收益", "公司历史盈余积累"),
+        ]
+    },
+    {
+        "category": "利润表 (Income Statement)",
+        "fields": [
+            ("sales", "营业总收入", "别名: revenues, revenue, turnover，成长性核心"),
+            ("cogs", "营业成本 (COGS)", "别名: cost_of_goods_sold，生产直接成本"),
+            ("gross_profit", "毛利润 (Gross Profit)", "sales - cogs，毛利率分母"),
+            ("operating_income", "营业利润 (EBIT)", "别名: ebit, op_income，主营盈利能力"),
+            ("net_income", "净利润 (Net Income)", "别名: income, ni, net_earnings，底线利润"),
+            ("interest_expense", "利息支出", "偿债负担与利息覆盖倍数"),
+            ("rd_expense", "研发费用 (R&D)", "别名: rnd_expense，科技创新投入"),
+            ("sga_expense", "销售及行政开支 (SG&A)", "运营管理效率"),
+            ("income_tax", "所得税费用", "税负比率分析"),
+        ]
+    },
+    {
+        "category": "现金流量表 (Cash Flow)",
+        "fields": [
+            ("cashflow_op", "经营现金流净额 (CFO)", "别名: operating_cashflow, cfo，真实现金造血"),
+            ("capex", "资本性支出 (CapEx)", "固定资产投资与扩产支出"),
+            ("fcf", "自由现金流 (FCF)", "cashflow_op - capex，真实回报"),
+            ("cashflow_invst", "投资活动现金流净额", "对外投资与购建长期资产"),
+            ("cashflow_fin", "筹资活动现金流净额", "股权/债务融资与派息还债"),
+            ("cashflow_dividends", "派发现金红利", "别名: dividends，分红收益率"),
+            ("depreciation", "折旧与摊销 (D&A)", "别名: depr，非现金成本调整"),
+            ("value_of_shares_reacquired_during_period", "股票回购金额", "股份回购注销，股东回报"),
+        ]
+    },
+    {
+        "category": "财务比率与估值 (Ratios & Valuation)",
+        "fields": [
+            ("working_capital", "净营运资本 (NWC)", "assets_curr - liabilities_curr"),
+            ("current_ratio", "流动比率", "assets_curr / liabilities_curr"),
+            ("inventory_turnover", "存货周转率", "cogs / inventory"),
+            ("ebitda", "税息折旧摊销前利润", "operating_income + depreciation"),
+            ("roic", "投入资本回报率", "operating_income / (equity + total_debt)"),
+            ("asset_turnover", "总资产周转率", "sales / assets"),
+            ("ev", "企业价值 (EV)", "cap + total_debt - cash"),
+            ("est_eps", "分析师预期EPS", "一致预期盈利信号"),
+        ]
+    },
+    {
+        "category": "风险模型与波动率 (Risk & Volatility)",
+        "fields": [
+            ("beta_last_30_days_spy", "大盘滚动Beta(30日)", "别名: beta，相对标普500系统性敏感度"),
+            ("volatility_20", "20日年化波动率", "短周期波动率反转/规避"),
+            ("volatility_60", "60日年化波动率", "中周期波动率基准"),
+        ]
+    },
+    {
+        "category": "截面与分组标识 (Metadata & Grouping)",
+        "fields": [
+            ("ticker", "股票代码", "标的唯一代码 (如 AAPL, MSFT)"),
+            ("date", "交易日期", "时间序列主键 (YYYY-MM-DD)"),
+            ("filed_date", "SEC 财报最新披露日", "点对点无未来函数时间戳"),
+            ("subindustry", "GICS 细分行业", "组内中性化核心分组列 (subindustry)"),
+            ("is_top1000", "Top 1000 市值标记", "Sub-universe 过滤标记"),
+        ]
+    },
+]
+
+
+def cmd_fields(args):
+    """查看或搜索支持的所有字段与同义词"""
+    from rich.table import Table
+    from rich import box
+
+    search = (args.search or "").strip().lower()
+    cat_filter = (args.category or "").strip().lower()
+
+    if args.json:
+        results = []
+        for cat in FIELD_CATALOG:
+            for fname, desc, usage in cat["fields"]:
+                if search and search not in fname.lower() and search not in desc.lower() and search not in usage.lower():
+                    continue
+                if cat_filter and cat_filter not in cat["category"].lower():
+                    continue
+                results.append({
+                    "category": cat["category"],
+                    "field": fname,
+                    "description": desc,
+                    "details": usage,
+                })
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return
+
+    table = Table(
+        title="✨ WorldQuant BRAIN 本地引擎已支持字段词典 (59 核心宽表列 + 自动同义词) ✨",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+    )
+    table.add_column("类别", style="bold magenta", width=24)
+    table.add_column("字段名称 (Field)", style="bold green", width=22)
+    table.add_column("中文释义", style="white", width=26)
+    table.add_column("别名 / 用途说明", style="yellow", width=42)
+
+    total_shown = 0
+    for cat in FIELD_CATALOG:
+        for fname, desc, usage in cat["fields"]:
+            if search and (search not in fname.lower() and search not in desc.lower() and search not in usage.lower()):
+                continue
+            if cat_filter and cat_filter not in cat["category"].lower():
+                continue
+            table.add_row(cat["category"], fname, desc, usage)
+            total_shown += 1
+
+    console.print(table)
+    console.print(f"[bold white]共显示 [green]{total_shown}[/green] 个字段。[/bold white]")
+    console.print(
+        "[dim]提示: 可使用 [bold cyan]python -m cli fields --search <关键词>[/bold cyan] 过滤。[/dim]\n"
+    )
+
+
 def cmd_dataset(args):
     """数据集管理与查看"""
     if args.build:
         build_master_dataset()
+    elif args.fields:
+        cmd_fields(args)
     elif args.info:
         if not MASTER_PATH.exists():
             console.print(f"[red]未找到数据集: {MASTER_PATH}[/red]")
@@ -286,6 +443,16 @@ def main():
     ds_parser = subparsers.add_parser("dataset", help="管理离线数据集")
     ds_parser.add_argument("--info", action="store_true", help="查看数据集概况")
     ds_parser.add_argument("--build", action="store_true", help="重新构建全量数据集")
+    ds_parser.add_argument("--fields", action="store_true", help="查看支持的字段列表与同义词")
+    ds_parser.add_argument("--search", type=str, default=None, help="搜索字段关键词")
+    ds_parser.add_argument("--category", type=str, default=None, help="按类别过滤字段")
+    ds_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+    # 6. fields 命令
+    fields_parser = subparsers.add_parser("fields", help="查询已支持的所有字段、同义词与量化用途")
+    fields_parser.add_argument("--search", type=str, default=None, help="搜索字段关键词 (例如 income, debt, return)")
+    fields_parser.add_argument("--category", type=str, default=None, help="按类别过滤 (如 price, assets, income, cashflow)")
+    fields_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
 
     args = parser.parse_args()
     if not args.command:
@@ -304,6 +471,8 @@ def main():
         cmd_commit(args)
     elif args.command == "dataset":
         cmd_dataset(args)
+    elif args.command == "fields":
+        cmd_fields(args)
 
 
 if __name__ == "__main__":
