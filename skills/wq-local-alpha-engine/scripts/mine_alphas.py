@@ -29,12 +29,13 @@ SKILL_ROOT = CURRENT_SCRIPT.parent.parent
 # 自动推导工程根目录
 PROJECT_ROOT = None
 for r in [
-    SKILL_ROOT.parent.parent,
-    SKILL_ROOT.parent,
+    SKILL_ROOT,                         # Self-contained skill directory
+    SKILL_ROOT.parent.parent,           # .agents/skills/wq-local-alpha-engine -> workspace root
+    SKILL_ROOT.parent,                  # skills/wq-local-alpha-engine -> subproject root
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui"),
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\My Quant Backtest System"),
 ]:
-    if (r / "cli.py").exists() and (r / "data" / "master_backtest.parquet").exists():
+    if (r / "data_loader").exists() and (r / "engine").exists():
         PROJECT_ROOT = r
         break
 
@@ -46,7 +47,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import polars as pl
 from engine.simulator import LocalWQSimulator
 from engine.correlation_checker import CorrelationChecker
-from data_loader.config import MASTER_PATH
+from engine.logger import log_research_event
+from data_loader.config import MASTER_PATH, OUTPUTS_DIR, ensure_workspace_dirs
 
 # 预定义种子候选池 (覆盖盈利质量、现金造血、资产负债防御、预期差与量价反转)
 CANDIDATE_POOL = [
@@ -170,6 +172,13 @@ def run_mining(min_sharpe: float = 1.25, min_fitness: float = 1.0, export_csv: s
                 "is_passed": passed,
                 "is_checks": str(metrics.is_checks),
             })
+            # 自动就地记录本次回测事件到当前工作目录 logs/
+            log_research_event(
+                event_type="mine",
+                expression=expr,
+                metrics=metrics,
+                alpha_id=alpha_id,
+            )
         except Exception as e:
             print(f"[{idx:02d}/{len(CANDIDATE_POOL):02d}] 💥 [ERROR] {alpha_id}: {e}")
 
@@ -177,9 +186,12 @@ def run_mining(min_sharpe: float = 1.25, min_fitness: float = 1.0, export_csv: s
     results.sort(key=lambda x: x["fitness"], reverse=True)
 
     if export_csv:
-        export_path = PROJECT_ROOT / export_csv
+        ensure_workspace_dirs()
+        export_path = Path(export_csv)
+        if not export_path.is_absolute():
+            export_path = OUTPUTS_DIR / export_path
         pl.DataFrame(results).write_csv(export_path)
-        print(f"\n📁 全部初筛与诊断结果已导出至: {export_path}")
+        print(f"\n📁 全部初筛与诊断结果已导出至当前工作区: {export_path}")
 
     print("\n" + "=" * 80)
     print(f"🎉 挖掘完毕！共测试 {len(CANDIDATE_POOL)} 个候选/杂交因子，达标入选 {qualifying_count} 个！")

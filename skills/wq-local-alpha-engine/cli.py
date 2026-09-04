@@ -405,7 +405,8 @@ def cmd_fields(args):
     console.print(table)
     console.print(f"[bold white]共显示 [green]{total_shown}[/green] 个字段。[/bold white]")
     console.print(
-        "[dim]提示: 可使用 [bold cyan]python -m cli fields --search <关键词>[/bold cyan] 过滤。[/dim]\n"
+        "[dim]提示: 可使用 [bold cyan]python -m cli fields --search <关键词>[/bold cyan] 过滤；\n"
+        "Web GUI (python gui.py) 右上角点击 [bold cyan]📖 字段与算子词典[/bold cyan] 可直接点击标签插入公式！[/dim]\n"
     )
 
 
@@ -426,6 +427,12 @@ def cmd_dataset(args):
         console.print(f"股票数: {df['ticker'].n_unique()} 只")
         console.print(f"时间跨度: {df['date'].min()} ~ {df['date'].max()}")
         console.print(f"可用字段: {', '.join(df.columns)}")
+
+
+def cmd_gui(args):
+    """启动本地图形化回测界面"""
+    from gui import start_gui
+    start_gui(host=args.host, port=args.port, open_browser=not args.no_browser)
 
 
 def main():
@@ -475,11 +482,17 @@ def main():
     ds_parser.add_argument("--category", type=str, default=None, help="按类别过滤字段")
     ds_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
 
-    # 6. fields 命令
+    # 6. fields 命令 (直达字段词典)
     fields_parser = subparsers.add_parser("fields", help="查询已支持的所有字段、同义词与量化用途")
     fields_parser.add_argument("--search", type=str, default=None, help="搜索字段关键词 (例如 income, debt, return)")
     fields_parser.add_argument("--category", type=str, default=None, help="按类别过滤 (如 price, assets, income, cashflow)")
     fields_parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
+
+    # 7. gui 命令
+    gui_parser = subparsers.add_parser("gui", help="启动本地图形化回测界面 (Web GUI)")
+    gui_parser.add_argument("--host", type=str, default="127.0.0.1", help="绑定主机地址 (默认: 127.0.0.1)")
+    gui_parser.add_argument("--port", type=int, default=8888, help="服务端口号 (默认: 8888)")
+    gui_parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
 
     args = parser.parse_args()
     if not args.command:
@@ -500,6 +513,8 @@ def main():
         cmd_dataset(args)
     elif args.command == "fields":
         cmd_fields(args)
+    elif args.command == "gui":
+        cmd_gui(args)
 
 
 if __name__ == "__main__":

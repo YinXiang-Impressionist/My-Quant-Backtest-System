@@ -1,0 +1,15 @@
+# Skill directory protection - ignore outputs and logs
+logs/
+outputs/
+data/committed_*
+data/submissions/
+__pycache__/
+*.pyc
+*.csv
+
+# Ignore large parquet files
+master_backtest.parquet
+*.parquet
+!committed_alphas_pnl.parquet
+logs/
+outputs/

@@ -24,12 +24,13 @@ SKILL_ROOT = CURRENT_SCRIPT.parent.parent
 # 定位工程根目录
 PROJECT_ROOT = None
 for r in [
+    SKILL_ROOT,                         # Self-contained skill root
     SKILL_ROOT.parent.parent,           # .agents/skills/wq-local-alpha-engine -> root
     SKILL_ROOT.parent,                  # skills/wq-local-alpha-engine -> root
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui"),
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\My Quant Backtest System"),
 ]:
-    if (r / "cli.py").exists() and (r / "data" / "master_backtest.parquet").exists():
+    if (r / "data_loader").exists() and (r / "data" / "master_backtest.parquet").exists():
         PROJECT_ROOT = r
         break
 

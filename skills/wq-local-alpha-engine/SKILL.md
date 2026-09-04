@@ -35,6 +35,22 @@ description: "WorldQuant BRAIN 本地超快速 (<20ms) 离线量化回测与因�
        └── 调用官方 API 提交线上并验证状态 status == ACTIVE (流水线永不因单个成功而终止！)
 ```
 
+### 1.1 双模便携架构与工作区隔离规范 (Dual-Mode Portable Architecture & Isolation)
+
+本引擎具备工业级“便携自包含 + 运行隔离”设计，完美兼顾移动便携与研发持久化：
+
+1. **便携自包含 (Portable Self-Contained Engine)**：
+   - Skill 内部自带完整运行核心：`engine/` (分层 AST 编译器与 C++ 并发仿真器)、`data_loader/` (动态路径解析与字段映射)、`cli.py` 以及完整离线 Lakehouse 宽表 `data/master_backtest.parquet` (270MB，同盘 NTFS 硬链接零冗余占用，异机跨盘自包含拷贝)。
+   - 任何人将本 Skill 单独复制到任何全新电脑，即使没有任何外部代码库，也能脱机 100% 独立运行！
+
+2. **工作区隔离与就地持久化 (Workspace Isolation & In-Place Persistence)**：
+   - 无论从哪个目录调起本 Skill（例如个人量化课题目录 `my_research_lab/`），**Skill 核心代码与静态资产永远保持纯净无污染 (Read-Only)**；
+   - 运行时产生的一切动态研发产物，一律**就地强制落盘于用户当前的启动工作目录 (`Path.cwd()`)**：
+     - `logs/alpha_research_YYYYMMDD.log`：按日轮转的结构化研发审计流水账；
+     - `outputs/*.csv`：批量因子挖掘与排行榜筛选导出表格；
+     - `data/committed_alphas.json` & `data/committed_alphas_pnl.parquet`：当前工作目录专属的达标因子库与日收益净值，用于严格把关自相关拦截（不同工作目录彼此完全物理隔离）；
+     - `data/submissions/*.json`：已准备就绪的官方提交清单。
+
 ---
 
 ## 2. 命令行极速工具链 (CLI Reference)

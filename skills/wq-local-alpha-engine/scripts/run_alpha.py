@@ -11,8 +11,9 @@ from pathlib import Path
 CURRENT_FILE = Path(__file__).resolve()
 # 优先相对当前 skill 目录定位根目录
 POSSIBLE_ROOTS = [
-    CURRENT_FILE.parent.parent.parent.parent, # .agents/skills/wq-local-alpha-engine/scripts -> root
-    CURRENT_FILE.parent.parent.parent,        # skills/wq-local-alpha-engine/scripts -> root
+    CURRENT_FILE.parent.parent,                # Self-contained skill root (carries engine/ and data_loader/)
+    CURRENT_FILE.parent.parent.parent.parent, # .agents/skills/wq-local-alpha-engine/scripts -> workspace root
+    CURRENT_FILE.parent.parent.parent,        # skills/wq-local-alpha-engine/scripts -> project root
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\sec_lakehouse_gui"),
     Path(r"d:\AAA Every Coding Project\Quant Backtest Project\My Quant Backtest System"),
     Path(r"d:\My Quant Backtest System"),
@@ -20,7 +21,7 @@ POSSIBLE_ROOTS = [
 
 PROJECT_ROOT = None
 for r in POSSIBLE_ROOTS:
-    if (r / "cli.py").exists() and (r / "data_loader").exists():
+    if (r / "engine").exists() and (r / "data_loader").exists():
         PROJECT_ROOT = r
         break
 
